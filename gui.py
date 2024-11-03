@@ -37,20 +37,32 @@ class MainWindow(QMainWindow):
 
         int_validator = QIntValidator(0, 1000000, self)
 
+        font = QFont()
+        font.setPointSize(12)
+
+        self.area_from = []
+        self.area_to = []
+        self.percent = []
         for row in range(5):
             area_from_edit = QLineEdit()
             area_from_edit.setValidator(int_validator)
             area_from_edit.setAlignment(Qt.AlignCenter)
+            area_from_edit.setFont(font)
+            self.area_from.append(area_from_edit)
             self.table.setCellWidget(row, 1, area_from_edit)
 
             area_to_edit = QLineEdit()
             area_to_edit.setValidator(int_validator)
             area_to_edit.setAlignment(Qt.AlignCenter)
+            area_to_edit.setFont(font)
+            self.area_to.append(area_to_edit)
             self.table.setCellWidget(row, 2, area_to_edit)
 
             percent_edit = QLineEdit()
             percent_edit.setValidator(int_validator)
             percent_edit.setAlignment(Qt.AlignCenter)
+            percent_edit.setFont(font)
+            self.percent.append(percent_edit)
             self.table.setCellWidget(row, 3, percent_edit)
 
         right_layout.addWidget(self.table)
@@ -67,6 +79,8 @@ class MainWindow(QMainWindow):
         generate_button.setFont(button_font)
         right_layout.addWidget(generate_button)
 
+        generate_button.clicked.connect(self.generate_clicked)
+
         spacer2 = QSpacerItem(0, 494)
         right_layout.addSpacerItem(spacer2)
 
@@ -80,3 +94,29 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Квартирограф")
 
         self.setGeometry(0, 0, 1500, 800)
+
+    def generate_clicked(self):
+        apartment_table = {
+            'studio': {
+                'area_range': (int(self.area_from[0].text()), int(self.area_to[0].text())),
+                'percent': int(self.percent[0].text())
+            },
+            '1 room': {
+                'area_range': (int(self.area_from[1].text()), int(self.area_to[1].text())),
+                'percent': int(self.percent[1].text())
+            },
+            '2 room': {
+                'area_range': (int(self.area_from[2].text()), int(self.area_to[2].text())),
+                'percent': int(self.percent[2].text())
+            },
+            '3 room': {
+                'area_range': (int(self.area_from[3].text()), int(self.area_to[3].text())),
+                'percent': int(self.percent[3].text())
+            },
+            '4 room': {
+                'area_range': (int(self.area_from[4].text()), int(self.area_to[4].text())),
+                'percent': int(self.percent[4].text())
+            },
+        }
+
+        self.graphics_view.fillApartments(apartment_table)
