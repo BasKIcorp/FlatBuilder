@@ -1,183 +1,207 @@
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsEllipseItem, QApplication, QGraphicsLineItem
-from PyQt5.QtCore import Qt, QLineF
-from PyQt5.QtGui import QBrush, QPen
+import sys
+
+from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsPolygonItem
+from PyQt5.QtCore import Qt, QPointF, QObject, pyqtSignal
+import math
+from threading import Thread
+
+from Classes.Geometry.Territory.Floor.Floor import Floor
+
+
+def except_hook(cls, exception, traceback):
+    sys.__excepthook__(cls, exception, traceback)
+
+
+class Worker(QObject):
+    finished = pyqtSignal(object)
+
+    def __init__(self, floor, apartment_table):
+        super().__init__()
+        self.floor = floor
+        self.apartment_table = apartment_table
+
+    def run(self):
+        self.floor.generatePlanning(self.apartment_table)
+        self.finished.emit(self.floor)  # Сигнал с результатом
 
 
 class MovablePoint(QGraphicsEllipseItem):
-    def __init__(self, x, y, radius, graph, point_id):
+    def __init__(self, x, y, radius, point_id, editor):
         super().__init__(-radius, -radius, 2 * radius, 2 * radius)
-        self.setBrush(QBrush(Qt.black))
-        self.setFlags(QGraphicsEllipseItem.ItemIsMovable | QGraphicsEllipseItem.ItemIsSelectable)
         self.setPos(x, y)
-        self.graph = graph
+        self.setFlags(QGraphicsEllipseItem.ItemIsMovable | QGraphicsEllipseItem.ItemIsSelectable)
+        self.setBrush(Qt.blue)
         self.point_id = point_id
+        self.editor = editor
+        self.connected_lines = []
+
+    def get_position(self):
+        pos = self.scenePos()
+        return pos.x(), pos.y()
+
+    def add_line(self, line):
+        """ Add a reference to a line connected to this point. """
+        self.connected_lines.append(line)
+
+    def remove_line(self, line):
+        """ Remove a line from this point's connected lines. """
+        if line in self.connected_lines:
+            self.connected_lines.remove(line)
 
     def mouseMoveEvent(self, event):
+        """ Update connected lines in real-time as the point moves. """
         super().mouseMoveEvent(event)
-        for line, is_start in self.graph[self.point_id]:
-            line_item = line.line()
-            if is_start:
-                line_item.setP1(self.scenePos())
-            else:
-                line_item.setP2(self.scenePos())
-            line.setLine(line_item)
+        for line in self.connected_lines:
+            line.update_line()
+
+
+class ConnectionLine(QGraphicsLineItem):
+    def __init__(self, start_point, end_point):
+        super().__init__()
+        self.start_point = start_point
+        self.end_point = end_point
+        start_point.add_line(self)
+        end_point.add_line(self)
+        self.update_line()
+
+    def update_line(self):
+        """ Update the line's position based on connected points. """
+        start_x, start_y = self.start_point.get_position()
+        end_x, end_y = self.end_point.get_position()
+        self.setLine(start_x, start_y, end_x, end_y)
 
 
 class Painter(QGraphicsView):
     def __init__(self, scene):
-        super().__init__(scene)
-        self.graphs = []
-        self.pen = QPen(Qt.black, 2)
+        super().__init__()
+        self.scene = scene
+        self.setScene(self.scene)
+        self.points = []
+        self.lines = []
+        self.radius = 2
+        self.point_id_counter = 1
+        self.zoom_factor = 1.15
+        self.default_zoom = 2.0
 
-        self.graph = {}
-        self.first_point = None
-        self.last_placed_point = None
-        self.point_counter = 0
-        self.closing_line = None
+        self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            item = self.itemAt(event.pos())
-            if item is None:
+            clicked_item = self.itemAt(event.pos())
+            if clicked_item is None:
                 scene_pos = self.mapToScene(event.pos())
-                new_point = MovablePoint(scene_pos.x(), scene_pos.y(), 5, self.graph, self.point_counter)
-                self.scene().addItem(new_point)
+                self.add_point(scene_pos.x(), scene_pos.y())
+                self.update_shape()
+            else:
+                super().mousePressEvent(event)
 
-                self.graph[self.point_counter] = []
-
-                if self.last_placed_point is not None:
-                    line_item = QGraphicsLineItem(QLineF(self.last_placed_point.scenePos(), scene_pos))
-                    self.scene().addItem(line_item)
-
-                    self.graph[self.point_counter].append((line_item, False))
-                    self.graph[self.last_placed_point.point_id].append((line_item, True))
-
-                if self.point_counter == 0:
-                    self.first_point = new_point
-
-                if self.first_point and self.point_counter > 1:
-                    if self.closing_line:
-                        print(self.closing_line.x())
-                        self.scene().removeItem(self.closing_line)
-                        self.graph[self.first_point.point_id].remove((self.closing_line, False))
-                        self.graph[self.last_placed_point.point_id].remove((self.closing_line, True))
-                        print("clsoing line removed")
-                        print(self.point_counter)
-                        print(self.first_point.point_id)
-
-                    self.closing_line = QGraphicsLineItem(QLineF(scene_pos, self.first_point.scenePos()))
-                    self.scene().addItem(self.closing_line)
-
-                    self.graph[self.point_counter].append((self.closing_line, True))
-                    self.graph[self.first_point.point_id].append((self.closing_line, False))
-
-                self.last_placed_point = new_point
-
-                self.point_counter += 1
-
-                print(f"added new point at {scene_pos} with ID {self.point_counter - 1}")
-            event.accept()
+    def wheelEvent(self, event):
+        if event.angleDelta().y() > 0:
+            self.scale(self.zoom_factor, self.zoom_factor)
         else:
-            super().mousePressEvent(event)
+            self.scale(1 / self.zoom_factor, 1 / self.zoom_factor)
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            self.graphs.append(self.graph)
-            self.graph = {}
-            self.first_point = None
-            self.last_placed_point = None
-            self.point_counter = 0
-            self.closing_line = None
-        if event.key() == Qt.Key_Delete:
-            selected_items = self.scene().selectedItems()
-            if selected_items:
-                for item in selected_items:
-                    if isinstance(item, MovablePoint):
-                        self.delete_point(item)
-            event.accept()
-        else:
-            super().keyPressEvent(event)
+    def add_point(self, x, y):
+        point = MovablePoint(x, y, self.radius, self.point_id_counter, self)
+        self.point_id_counter += 1
+        self.scene.addItem(point)
+        self.points.append(point)
 
-    def delete_point(self, point):
-        point_id = point.point_id
-        if point_id not in self.graph:
+    def update_shape(self):
+        if len(self.points) < 2:
             return
 
-        connected_lines = self.graph[point_id]
+        center = {'x': 0, 'y': 0}
+        for point in self.points:
+            center['x'] += point.get_position()[0] / len(self.points)
+            center['y'] += point.get_position()[1] / len(self.points)
 
-        neighbors = []
-        for line, is_start in connected_lines:
-            if is_start:
-                other_point_id = [pid for pid, lst in self.graph.items() if (line, False) in lst]
-            else:
-                other_point_id = [pid for pid, lst in self.graph.items() if (line, True) in lst]
+        def clockwise_angle(point):
+            angle = math.atan2(point.get_position()[1] - center["y"], point.get_position()[0] - center["x"])
+            distance = math.sqrt(
+                (point.get_position()[0] - center["x"]) ** 2 + (point.get_position()[1] - center["y"]) ** 2)
+            return angle, distance
 
-            if other_point_id:
-                neighbors.append(other_point_id[0])
+        self.points.sort(key=clockwise_angle)
 
-            self.scene().removeItem(line)
+        for idx, point in enumerate(self.points):
+            point.point_id = idx + 1
+            x, y = point.get_position()
+            print(x, y, point.point_id)
+        print("\n")
 
-        self.scene().removeItem(point)
-        del self.graph[point_id]
+        for line in self.lines:
+            self.scene.removeItem(line)
+        self.lines.clear()
 
-        if point == self.last_placed_point:
-            remaining_point_ids = list(self.graph.keys())
-            if remaining_point_ids:
-                self.last_placed_point = next(
-                    (p for p in self.scene().items() if
-                     isinstance(p, MovablePoint) and p.point_id == remaining_point_ids[-1]),
-                    None
-                )
-            else:
-                self.last_placed_point = None
+        for i in range(len(self.points)):
+            start_point = self.points[i]
+            end_point = self.points[(i + 1) % len(self.points)]
+            line = ConnectionLine(start_point, end_point)
+            self.lines.append(line)
+            self.scene.addItem(line)
 
-        if len(neighbors) == 2:
-            start_point_id = neighbors[0]
-            end_point_id = neighbors[1]
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Delete and self.scene.selectedItems():
+            for item in self.scene.selectedItems():
+                if isinstance(item, MovablePoint):
+                    for line in item.connected_lines[:]:
+                        self.scene.removeItem(line)
+                        line.start_point.remove_line(line)
+                        line.end_point.remove_line(line)
 
-            start_point = next(
-                (item for item in self.scene().items() if
-                 isinstance(item, MovablePoint) and item.point_id == start_point_id),
-                None
-            )
-            end_point = next(
-                (item for item in self.scene().items() if
-                 isinstance(item, MovablePoint) and item.point_id == end_point_id),
-                None
-            )
+                        try:
+                            self.lines.remove(line)
+                        except ValueError:
+                            pass
 
-            if start_point and end_point:
-                new_line = QGraphicsLineItem(QLineF(start_point.scenePos(), end_point.scenePos()))
-                self.scene().addItem(new_line)
+                    index = self.points.index(item)
+                    prev_point = self.points[index - 1] if index > 0 else self.points[-1]
+                    next_point = self.points[(index + 1) % len(self.points)]
 
-                self.graph[start_point_id].append((new_line, True))
-                self.graph[end_point_id].append((new_line, False))
+                    self.points.remove(item)
+                    self.scene.removeItem(item)
 
-        if len(self.graph) < 3 and self.closing_line:
-            self.scene().removeItem(self.closing_line)
-            self.closing_line = None
+                    if len(self.points) > 1:
+                        new_line = ConnectionLine(prev_point, next_point)
+                        self.lines.append(new_line)
+                        self.scene.addItem(new_line)
 
-        if self.first_point == point:
-            if len(self.graph) > 0:
-                new_first_point_id = list(self.graph.keys())[0]
-                self.first_point = next(
-                    (item for item in self.scene().items() if
-                     isinstance(item, MovablePoint) and item.point_id == new_first_point_id),
-                    None
-                )
-                self.scene().removeItem(self.closing_line)
-                print("first point remove closing line")
-                print(self.first_point.point_id)
-            else:
-                self.first_point = None
+            self.update_shape()
 
-        if self.last_placed_point and self.first_point and len(self.graph) > 2:
-            if self.closing_line:
-                self.scene().removeItem(self.closing_line)
-            self.closing_line = QGraphicsLineItem(
-                QLineF(self.last_placed_point.scenePos(), self.first_point.scenePos()))
-            self.scene().addItem(self.closing_line)
-            self.graph[self.last_placed_point.point_id].append((self.closing_line, True))
-            self.graph[self.first_point.point_id].append((self.closing_line, False))
+    def fillApartments(self, apartment_table):
+        floor_points = []
+        for point in self.points:
+            floor_points.append((int(point.get_position()[0]), int(point.get_position()[1])))
+            self.scene.removeItem(point)
+        floor = Floor(floor_points)
 
-        print(f"deleted point with ID {point_id}")
+        # Создаем поток и передаем его в отдельный класс Worker для выполнения в фоне
+        self.worker = Worker(floor, apartment_table)
+        self.worker_thread = Thread(target=self.worker.run)
+
+        # Соединяем сигнал завершения работы с функцией для обработки результата
+        self.worker.finished.connect(self.onApartmentsGenerated)
+        self.worker_thread.start()
+
+    def onApartmentsGenerated(self, floor):
+        # Цвета для разных типов квартир
+        apt_colors = {
+            'studio': '#fa6b6b',
+            '1 room': '#6dd170',
+            '2 room': '#6db8d1',
+            '3 room': '#ed975a',
+            '4 room': '#ba7ed9'
+        }
+
+        # Добавляем квартиры на сцену
+        for apt in floor.apartments:
+            poly = apt['geometry']
+            x, y = poly.exterior.xy
+            poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+            polygon = QPolygonF(poly_points)
+
+            filled_shape = QGraphicsPolygonItem(polygon)
+            filled_shape.setBrush(QBrush(QColor(apt_colors[apt['type']])))
+            self.scene.addItem(filled_shape)
