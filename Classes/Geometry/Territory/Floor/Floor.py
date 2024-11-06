@@ -20,6 +20,7 @@ class Floor(GeometricFigure):
         self.stairs = stairs if stairs is not None else []
 
     def generatePlanning(self, apartment_table, max_iterations=50, cell_size = 2):
+        self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
         best_plan = None
@@ -27,7 +28,7 @@ class Floor(GeometricFigure):
         start_time = time.time()
 
         # Create the cell grid once
-        self.create_cell_grid(cell_size=cell_size)
+        self.create_cell_grid(cell_size=self.cell_size)
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
@@ -79,7 +80,7 @@ class Floor(GeometricFigure):
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
 
         for apt_type, apt_info in apartment_table.items():
-            min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=2)
+            min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
 
             while allocated_cell_count >= min_cells:
