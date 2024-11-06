@@ -34,7 +34,7 @@ apartment_table = {
 }
 
 # Генерация планировки
-planning = floor.generatePlanning(apartment_table)
+planning = floor.generatePlanning(apartment_table, max_iterations=15)
 
 # Визуализация
 fig, ax = plt.subplots(figsize=(10, 8))

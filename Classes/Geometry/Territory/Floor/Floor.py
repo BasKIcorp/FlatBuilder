@@ -21,23 +21,28 @@ class Floor(GeometricFigure):
 
     def generatePlanning(self, apartment_table, max_iterations=50, cell_size = 2):
         """Generates a floor plan by allocating apartments according to the given apartment table."""
+        self.apartments = []  # Initialize as empty list
         best_plan = None
         best_score = float('inf')  # The lower, the better
         start_time = time.time()
 
-        for iteration in range(max_iterations):
-            # Create the cell grid using the method from GeometricFigure
-            self.create_cell_grid(cell_size=cell_size)
+        # Create the cell grid once
+        self.create_cell_grid(cell_size=cell_size)
 
-            # Cells and cell_dict are stored in self.cells and self.cell_dict
+        for iteration in range(max_iterations):
+            # Reset the cell assignments between iterations
+            self._reset_cell_assignments()
 
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells, apartment_table)
 
-            # **NEW**: Validate apartments for free sides
+            # **Validation**: Validate apartments for free sides
+            if not apartments:
+                continue  # No apartments allocated in this iteration
+
             if not self._validate_apartments_free_sides(apartments):
                 # Allocation is invalid, skip to next iteration
-                print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
+                # print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
                 continue
 
             # Calculate distribution error
@@ -53,11 +58,16 @@ class Floor(GeometricFigure):
             if best_score == 0:
                 break
 
-        self.apartments = best_plan  # Save the best generated plan
+        self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         total_time = time.time() - start_time
         print(f"Floor planning completed in {total_time:.2f} seconds.")
 
         return self.apartments
+
+    def _reset_cell_assignments(self):
+        """Resets the 'assigned' status of all cells in the grid."""
+        for cell in self.cells:
+            cell['assigned'] = False
 
     def _allocate_apartments(self, cells, apartment_table):
         """Allocates cells to apartments according to the specified parameters."""
@@ -81,7 +91,7 @@ class Floor(GeometricFigure):
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
 
-                # **First Validation**: Check if apartment has at least one side adjacent to the external perimeter
+                # First Validation: Check if apartment has at least one side adjacent to the external perimeter
                 if not self._validate_apartment_perimeter_adjacency(apartment_polygon):
                     # If the apartment does not touch the perimeter, unassign the cells and try again
                     for cell in apartment_cells:
