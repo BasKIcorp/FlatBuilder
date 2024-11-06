@@ -6,7 +6,7 @@ from matplotlib.lines import Line2D
 from Classes.Geometry.Territory.Floor.Floor import Floor
 
 # Создаем объект этажа
-floor_points = [(0, 0), (100, 0), (100, 80), (60, 80), (0, 100)]  # Пример полигона этажа
+floor_points = [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)]  # Пример полигона этажа
 floor = Floor(floor_points)
 
 # Таблица квартир
@@ -54,12 +54,12 @@ apt_colors = {
 
 # Отображение квартир
 for apt in floor.apartments:
-    poly = apt['geometry']
+    poly = apt.polygon
     x, y = poly.exterior.xy
-    ax.fill(x, y, alpha=0.5, facecolor=apt_colors[apt['type']], edgecolor='black')
+    ax.fill(x, y, alpha=0.5, facecolor=apt_colors[apt.type], edgecolor='black')
     # Вычисляем центр полигона для размещения метки
     centroid = poly.centroid
-    ax.text(centroid.x, centroid.y, apt['type'], horizontalalignment='center', verticalalignment='center', fontsize=8)
+    ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
 
 # Настройка графика
 ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)

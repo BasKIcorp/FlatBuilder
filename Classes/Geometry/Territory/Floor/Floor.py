@@ -1,113 +1,71 @@
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Apartment.Apartment import Apartment
+from Classes.Geometry.Territory.Apartment.Room import Room
+from Classes.Geometry.Territory.Apartment.WetArea import WetArea
+from Classes.Geometry.Territory.Apartment.Balcony import Balcony
 from Classes.Geometry.Territory.Floor.Elevator import Elevator
 from Classes.Geometry.Territory.Floor.Stair import Stair
-from shapely.geometry import Polygon, Point, LineString
-from shapely.ops import unary_union, linemerge
+from shapely.geometry import Polygon, LineString
+from shapely.ops import unary_union
 import random
 from typing import List, Tuple
 import math
 import time
 
 class Floor(GeometricFigure):
-    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = [], elevators: List['Elevator'] = [], stairs: List['Stair'] = []):
+    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None, elevators: List['Elevator'] = None, stairs: List['Stair'] = None):
         super().__init__(points)
-        self.apartments = apartments  # Список квартир на этаже
-        self.elevators = elevators  # Список лифтов на этаже
-        self.stairs = stairs  # Список лестниц на этаже
+        self.apartments = apartments if apartments is not None else []  # List of Apartment objects
+        self.elevators = elevators if elevators is not None else []
+        self.stairs = stairs if stairs is not None else []
 
-    def generatePlanning(self, apartment_table, max_iterations=5):
+    def generatePlanning(self, apartment_table, max_iterations=50, cell_size = 2):
+        """Generates a floor plan by allocating apartments according to the given apartment table."""
         best_plan = None
-        best_score = float('inf')  # Чем меньше, тем лучше
+        best_score = float('inf')  # The lower, the better
         start_time = time.time()
 
         for iteration in range(max_iterations):
-            # Создаем сетку ячеек
-            cells, cell_dict = self._create_cell_grid(cell_size=2)
+            # Create the cell grid using the method from GeometricFigure
+            self.create_cell_grid(cell_size=cell_size)
 
-            # Предварительная обработка ячеек
-            self._process_cells(cells, cell_dict)
+            # Cells and cell_dict are stored in self.cells and self.cell_dict
 
-            # Распределяем ячейки по квартирам
-            apartments = self._allocate_apartments(cells, apartment_table)
+            # Allocate apartments using the cell grid
+            apartments = self._allocate_apartments(self.cells, apartment_table)
 
-            # Вычисляем ошибку распределения
+            # **NEW**: Validate apartments for free sides
+            if not self._validate_apartments_free_sides(apartments):
+                # Allocation is invalid, skip to next iteration
+                print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
+                continue
+
+            # Calculate distribution error
             total_error = self._calculate_total_error(apartments, apartment_table)
 
-            # Обновляем лучший план, если текущий лучше
+            # Update the best plan if current is better
             if total_error < best_score:
                 best_score = total_error
                 best_plan = apartments
-                print(f"Итерация {iteration + 1}: найден лучший план с ошибкой {best_score:.2f}%")
+                print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
 
+            # Early exit if perfect plan is found
             if best_score == 0:
                 break
 
-        self.apartments = best_plan  # Сохраняем лучшую сгенерированную планировку
+        self.apartments = best_plan  # Save the best generated plan
         total_time = time.time() - start_time
-        print(f"Генерация планировки завершена за {total_time:.2f} секунд.")
+        print(f"Floor planning completed in {total_time:.2f} seconds.")
 
         return self.apartments
 
-    def _create_cell_grid(self, cell_size):
-        """Создает сетку ячеек, покрывающих полигон этажа."""
-        minx, miny, maxx, maxy = self.polygon.bounds
-        num_cells_x = int(math.ceil((maxx - minx) / cell_size))
-        num_cells_y = int(math.ceil((maxy - miny) / cell_size))
-
-        cells = []
-        cell_dict = {}
-        for i in range(num_cells_x):
-            for j in range(num_cells_y):
-                x1 = minx + i * cell_size
-                y1 = miny + j * cell_size
-                x2 = x1 + cell_size
-                y2 = y1 + cell_size
-                cell_polygon = Polygon([
-                    (x1, y1),
-                    (x2, y1),
-                    (x2, y2),
-                    (x1, y2)
-                ])
-                if self.polygon.intersects(cell_polygon):
-                    intersection = self.polygon.intersection(cell_polygon)
-                    if intersection.area > 0.5 * cell_polygon.area:
-                        cells.append({
-                            'polygon': cell_polygon,
-                            'assigned': False,
-                            'neighbors': [],
-                            'id': (i, j),
-                            'on_perimeter': False
-                        })
-                        cell_dict[(i, j)] = cells[-1]
-        return cells, cell_dict
-
-    def _process_cells(self, cells, cell_dict):
-        """Определяет соседей ячеек и отмечает ячейки на периметре."""
-        exterior = self.polygon.exterior
-        for cell in cells:
-            i, j = cell['id']
-            cell_polygon = cell['polygon']
-
-            # Проверяем, граничит ли ячейка с внешней стеной
-            if cell_polygon.exterior.intersects(exterior):
-                cell['on_perimeter'] = True
-
-            neighbors = []
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                ni, nj = i + dx, j + dy
-                neighbor = cell_dict.get((ni, nj))
-                if neighbor and not neighbor['assigned']:
-                    neighbors.append(neighbor)
-            cell['neighbors'] = neighbors
-
     def _allocate_apartments(self, cells, apartment_table):
-        """Распределяет ячейки по квартирам согласно заданным параметрам."""
+        """Allocates cells to apartments according to the specified parameters."""
         random.shuffle(cells)
         apartments = []
         remaining_cells = [cell for cell in cells if not cell['assigned']]
 
-        # Вычисляем количество ячеек для каждого типа квартиры
+        # Calculate the number of cells for each apartment type
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
 
         for apt_type, apt_info in apartment_table.items():
@@ -118,33 +76,75 @@ class Floor(GeometricFigure):
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
 
                 if not apartment_cells:
-                    break
+                    break  # No more apartments of this type can be allocated
 
-                # Проверяем, граничит ли квартира с периметром
+                # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
-                if not apartment_polygon.exterior.intersects(self.polygon.exterior):
+
+                # **First Validation**: Check if apartment has at least one side adjacent to the external perimeter
+                if not self._validate_apartment_perimeter_adjacency(apartment_polygon):
+                    # If the apartment does not touch the perimeter, unassign the cells and try again
                     for cell in apartment_cells:
                         cell['assigned'] = False
                     continue
 
-                # Сохраняем информацию о квартире
-                apartment_area = apartment_polygon.area
-                apartment = {
-                    'type': apt_type,
-                    'area': apartment_area,
-                    'geometry': apartment_polygon
-                }
+                # Create an Apartment object
+                points = list(apartment_polygon.exterior.coords)
+                rooms = []       # Placeholder for rooms
+                wet_areas = []   # Placeholder for wet areas
+                balconies = []   # Placeholder for balconies
+
+                apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas, balconies=balconies)
+
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
 
-                # Обновляем список оставшихся ячеек
+                # Update the list of remaining cells
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
 
         return apartments
 
+    def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
+        """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
+        return apartment_polygon.exterior.intersects(self.polygon.exterior)
+
+    def _validate_apartments_free_sides(self, apartments):
+        """Second validation: Checks that each apartment has at least one free side.
+
+        A free side is a side not adjacent to the external perimeter or any other apartment.
+        Returns True if all apartments have at least one free side, False otherwise.
+        """
+        for i, apt in enumerate(apartments):
+            apartment_polygon = apt.polygon
+            has_free_side = False
+            # Get the exterior coordinates as pairs of points
+            coords = list(apartment_polygon.exterior.coords)
+            # Create LineStrings for each side
+            sides = [LineString([coords[j], coords[j+1]]) for j in range(len(coords)-1)]  # last point is same as first
+
+            for side in sides:
+                # Check if side intersects with external perimeter
+                if self.polygon.exterior.intersects(side):
+                    continue
+                # Check if side intersects with any other apartment
+                for k, other_apt in enumerate(apartments):
+                    if k == i:
+                        continue
+                    if other_apt.polygon.exterior.intersects(side):
+                        break  # Side touches another apartment
+                else:
+                    # Side does not touch external perimeter or any other apartment
+                    has_free_side = True
+                    break
+
+            if not has_free_side:
+                # Apartment does not have any free sides
+                return False
+        return True
+
     def _calculate_cell_counts(self, apartment_table, cells):
-        """Вычисляет количество ячеек для каждого типа квартиры."""
+        """Calculates the number of cells to allocate for each apartment type."""
         total_area = self.polygon.area
         cell_area = cells[0]['polygon'].area if cells else 0
         cell_counts = {}
@@ -157,17 +157,18 @@ class Floor(GeometricFigure):
         return cell_counts, remaining_cell_counts
 
     def _get_apartment_cell_range(self, area_range, cell_size):
-        """Определяет минимальное и максимальное количество ячеек для квартиры."""
-        min_cells = max(1, int(area_range[0] / (cell_size ** 2)))
-        max_cells = int(area_range[1] / (cell_size ** 2))
+        """Determines the minimum and maximum number of cells for an apartment based on the area range."""
+        cell_area = cell_size ** 2  # Area of a single cell
+        min_cells = max(1, int(area_range[0] / cell_area))
+        max_cells = int(area_range[1] / cell_area)
         return min_cells, max_cells
 
     def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells):
-        """Аллоцирует ячейки для одной квартиры."""
+        """Allocates cells for a single apartment using BFS to ensure contiguity."""
         apt_cell_count = random.randint(min_cells, max_cells)
-        available_perimeter_cells = [cell for cell in remaining_cells if not cell['assigned'] and cell['on_perimeter']]
+        available_perimeter_cells = [cell for cell in remaining_cells if cell['on_perimeter']]
         if not available_perimeter_cells:
-            return None
+            return None  # No available perimeter cells to start an apartment
 
         start_cell = random.choice(available_perimeter_cells)
         queue = [start_cell]
@@ -185,27 +186,43 @@ class Floor(GeometricFigure):
             apartment_cells.append(current_cell)
             current_cell['assigned'] = True
 
-            # Добавляем соседей в очередь
-            neighbors = current_cell['neighbors']
+            # Add unassigned neighbors to the queue
+            neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
             random.shuffle(neighbors)
             queue.extend(neighbors)
 
         if len(apartment_cells) >= min_cells:
             return apartment_cells
         else:
-            # Отменяем назначение ячеек, если не удалось сформировать квартиру
+            # Revert cell assignments if the apartment could not be formed
             for cell in apartment_cells:
                 cell['assigned'] = False
             return None
 
     def _calculate_total_error(self, apartments, apartment_table):
-        """Вычисляет суммарную ошибку распределения квартир по типам."""
-        total_allocated_area = sum(apt['area'] for apt in apartments)
+        """Calculates the total error in apartment type distribution among allocated area."""
+        # Calculate the total allocated area
+        total_allocated_area = sum(apt.area for apt in apartments)
+
+        # Calculate actual percentages among allocated area
         actual_percentages = {}
         for apt_type in apartment_table.keys():
-            total_type_area = sum(apt['area'] for apt in apartments if apt['type'] == apt_type)
+            total_type_area = sum(apt.area for apt in apartments if apt.type == apt_type)
             actual_percent = (total_type_area / total_allocated_area) * 100 if total_allocated_area > 0 else 0
             actual_percentages[apt_type] = actual_percent
 
-        total_error = sum(abs(apartment_table[apt_type]['percent'] - actual_percentages.get(apt_type, 0)) for apt_type in apartment_table.keys())
+        # Calculate total desired percentage
+        total_desired_percent = sum(apt_info['percent'] for apt_info in apartment_table.values())
+
+        # Normalize desired percentages to sum up to 100%
+        normalized_desired_percentages = {}
+        for apt_type, apt_info in apartment_table.items():
+            normalized_percent = (apt_info['percent'] / total_desired_percent) * 100 if total_desired_percent > 0 else 0
+            normalized_desired_percentages[apt_type] = normalized_percent
+
+        # Calculate total error based on normalized desired percentages
+        total_error = sum(
+            abs(normalized_desired_percentages[apt_type] - actual_percentages.get(apt_type, 0))
+            for apt_type in apartment_table.keys()
+        )
         return total_error
