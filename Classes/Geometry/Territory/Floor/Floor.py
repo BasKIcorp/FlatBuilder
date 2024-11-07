@@ -5,21 +5,26 @@ from Classes.Geometry.Territory.Apartment.WetArea import WetArea
 from Classes.Geometry.Territory.Apartment.Balcony import Balcony
 from Classes.Geometry.Territory.Floor.Elevator import Elevator
 from Classes.Geometry.Territory.Floor.Stair import Stair
-from shapely.geometry import Polygon, LineString
+from shapely.geometry import Polygon, LineString, box
 from shapely.ops import unary_union
+from shapely.prepared import prep
+from shapely.vectorized import contains
 import random
 from typing import List, Tuple
 import math
 import time
+import numpy as np
+
 
 class Floor(GeometricFigure):
-    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None, elevators: List['Elevator'] = None, stairs: List['Stair'] = None):
+    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None,
+                 elevators: List['Elevator'] = None, stairs: List['Stair'] = None):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = elevators if elevators is not None else []
         self.stairs = stairs if stairs is not None else []
 
-    def generatePlanning(self, apartment_table, max_iterations=50, cell_size = 2):
+    def generatePlanning(self, apartment_table, max_iterations=50, cell_size=2):
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -101,11 +106,12 @@ class Floor(GeometricFigure):
 
                 # Create an Apartment object
                 points = list(apartment_polygon.exterior.coords)
-                rooms = []       # Placeholder for rooms
-                wet_areas = []   # Placeholder for wet areas
-                balconies = []   # Placeholder for balconies
+                rooms = []  # Placeholder for rooms
+                wet_areas = []  # Placeholder for wet areas
+                balconies = []  # Placeholder for balconies
 
-                apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas, balconies=balconies)
+                apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas,
+                                      balconies=balconies)
 
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
@@ -132,7 +138,8 @@ class Floor(GeometricFigure):
             # Get the exterior coordinates as pairs of points
             coords = list(apartment_polygon.exterior.coords)
             # Create LineStrings for each side
-            sides = [LineString([coords[j], coords[j+1]]) for j in range(len(coords)-1)]  # last point is same as first
+            sides = [LineString([coords[j], coords[j + 1]]) for j in
+                     range(len(coords) - 1)]  # last point is same as first
 
             for side in sides:
                 # Check if side intersects with external perimeter
@@ -175,11 +182,15 @@ class Floor(GeometricFigure):
         return min_cells, max_cells
 
     def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells):
-        """Allocates cells for a single apartment using BFS to ensure contiguity."""
+        """Allocates cells for a single apartment using BFS to ensure contiguity.
+
+        Modification: Adds neighbors to the queue based on the number of their free neighbors.
+        Cells with more free neighbors are prioritized.
+        """
         apt_cell_count = random.randint(min_cells, max_cells)
-        available_perimeter_cells = [cell for cell in remaining_cells if cell['on_perimeter']]
+        available_perimeter_cells = [cell for cell in remaining_cells if cell['is_corner']]
         if not available_perimeter_cells:
-            return None  # No available perimeter cells to start an apartment
+            return None  # Нет доступных угловых клеток для начала апартамента
 
         start_cell = random.choice(available_perimeter_cells)
         queue = [start_cell]
@@ -197,15 +208,27 @@ class Floor(GeometricFigure):
             apartment_cells.append(current_cell)
             current_cell['assigned'] = True
 
-            # Add unassigned neighbors to the queue
+            # Получаем не назначенные соседи текущей клетки
             neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
-            random.shuffle(neighbors)
-            queue.extend(neighbors)
+
+            # Сортируем соседей по убыванию количества их свободных соседей
+            neighbors_sorted = sorted(
+                neighbors,
+                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+                reverse=True
+            )
+
+            # Добавляем отсортированных соседей по одному в очередь
+            for neighbor in neighbors_sorted:
+                if len(apartment_cells) + len(queue) >= apt_cell_count:
+                    break  # Предотвращаем превышение необходимого количества клеток
+                if neighbor['id'] not in visited_cells:
+                    queue.append(neighbor)
 
         if len(apartment_cells) >= min_cells:
             return apartment_cells
         else:
-            # Revert cell assignments if the apartment could not be formed
+            # Отменяем назначения клеток, если апартамент не удалось сформировать
             for cell in apartment_cells:
                 cell['assigned'] = False
             return None
