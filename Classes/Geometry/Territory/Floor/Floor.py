@@ -5,7 +5,7 @@ from Classes.Geometry.Territory.Apartment.WetArea import WetArea
 from Classes.Geometry.Territory.Apartment.Balcony import Balcony
 from Classes.Geometry.Territory.Floor.Elevator import Elevator
 from Classes.Geometry.Territory.Floor.Stair import Stair
-from shapely.geometry import Polygon, LineString, box
+from shapely.geometry import Polygon, LineString, box, MultiPolygon
 from shapely.ops import unary_union
 from shapely.prepared import prep
 from shapely.vectorized import contains
@@ -98,7 +98,13 @@ class Floor(GeometricFigure):
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
 
                 # First Validation: Check if apartment has at least one side adjacent to the external perimeter
-                if not self._validate_apartment_perimeter_adjacency(apartment_polygon):
+                if isinstance(apartment_polygon, MultiPolygon):
+                    # If the apartment does not touch the perimeter, unassign the cells and try again
+                    for cell in apartment_cells:
+                        cell['assigned'] = False
+                    continue
+
+                if (not self._validate_apartment_perimeter_adjacency(apartment_polygon)):
                     # If the apartment does not touch the perimeter, unassign the cells and try again
                     for cell in apartment_cells:
                         cell['assigned'] = False
@@ -192,6 +198,7 @@ class Floor(GeometricFigure):
         if not available_perimeter_cells:
             return None  # Нет доступных угловых клеток для начала апартамента
 
+        # Выбираем случайную стартовую клетку из доступных угловых клеток
         start_cell = random.choice(available_perimeter_cells)
         queue = [start_cell]
         apartment_cells = []
@@ -208,7 +215,7 @@ class Floor(GeometricFigure):
             apartment_cells.append(current_cell)
             current_cell['assigned'] = True
 
-            # Получаем не назначенные соседи текущей клетки
+            # Получаем не назначенные соседние клетки
             neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
 
             # Сортируем соседей по убыванию количества их свободных соседей
@@ -218,20 +225,17 @@ class Floor(GeometricFigure):
                 reverse=True
             )
 
-            # Добавляем отсортированных соседей по одному в очередь
-            for neighbor in neighbors_sorted:
-                if len(apartment_cells) + len(queue) >= apt_cell_count:
-                    break  # Предотвращаем превышение необходимого количества клеток
-                if neighbor['id'] not in visited_cells:
-                    queue.append(neighbor)
+            # Добавляем отсортированных соседей в очередь
+            queue.extend(neighbors_sorted)
 
-        if len(apartment_cells) >= min_cells:
-            return apartment_cells
-        else:
-            # Отменяем назначения клеток, если апартамент не удалось сформировать
+        # Проверка, удалось ли выделить нужное количество клеток
+        if len(apartment_cells) < min_cells:
+            # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
             for cell in apartment_cells:
                 cell['assigned'] = False
             return None
+
+        return apartment_cells
 
     def _calculate_total_error(self, apartments, apartment_table):
         """Calculates the total error in apartment type distribution among allocated area."""

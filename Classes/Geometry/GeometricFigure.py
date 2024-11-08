@@ -110,7 +110,7 @@ class GeometricFigure:
 
             # Find neighbors, including diagonal neighbors
             neighbors = []
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (-1, 1), (1, -1)]:
                 ni, nj = i + dx, j + dy
                 if (ni, nj) in self.cell_dict:
                     neighbor = self.cell_dict[(ni, nj)]
