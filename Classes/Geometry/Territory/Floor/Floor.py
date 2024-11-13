@@ -15,6 +15,8 @@ import math
 import time
 import numpy as np
 
+from Tests.Floor.CellAnimTest import floor
+
 
 class Floor(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None,
@@ -23,6 +25,8 @@ class Floor(GeometricFigure):
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = elevators if elevators is not None else []
         self.stairs = stairs if stairs is not None else []
+        self.queue_corners_to_allocate = []
+
 
     def generatePlanning(self, apartment_table, max_iterations=50, cell_size=2):
         self.cell_size = cell_size
@@ -37,6 +41,7 @@ class Floor(GeometricFigure):
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
+            print(f"Iteration number {iteration}")
             self._reset_cell_assignments()
 
             # Allocate apartments using the cell grid
@@ -77,38 +82,30 @@ class Floor(GeometricFigure):
 
     def _allocate_apartments(self, cells, apartment_table):
         """Allocates cells to apartments according to the specified parameters."""
-        random.shuffle(cells)
+
         apartments = []
         remaining_cells = [cell for cell in cells if not cell['assigned']]
+        self.initial_corner_cells = [cell for cell in remaining_cells if cell['is_corner']]
 
         # Calculate the number of cells for each apartment type
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
 
         for apt_type, apt_info in apartment_table.items():
+
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
-
             while allocated_cell_count >= min_cells:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
-
+                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
-
+                self._update_cell_properties(apartment_cells)
+                #
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
 
                 # First Validation: Check if apartment has at least one side adjacent to the external perimeter
-                if isinstance(apartment_polygon, MultiPolygon):
-                    # If the apartment does not touch the perimeter, unassign the cells and try again
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    continue
 
-                if (not self._validate_apartment_perimeter_adjacency(apartment_polygon)):
-                    # If the apartment does not touch the perimeter, unassign the cells and try again
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    continue
 
                 # Create an Apartment object
                 points = list(apartment_polygon.exterior.coords)
@@ -124,7 +121,10 @@ class Floor(GeometricFigure):
                 remaining_cell_counts[apt_type] = allocated_cell_count
 
                 # Update the list of remaining cells
-                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+
+                # Update cell properties after adding the apartment
+                print(apt_type)
+
 
         return apartments
 
@@ -169,7 +169,7 @@ class Floor(GeometricFigure):
 
     def _calculate_cell_counts(self, apartment_table, cells):
         """Calculates the number of cells to allocate for each apartment type."""
-        total_area = self.polygon.area
+        total_area = 0.7 * self.polygon.area
         cell_area = cells[0]['polygon'].area if cells else 0
         cell_counts = {}
         for apt_type, apt_info in apartment_table.items():
@@ -193,27 +193,29 @@ class Floor(GeometricFigure):
         Modification: Adds neighbors to the queue based on the number of their free neighbors.
         Cells with more free neighbors are prioritized.
         """
+
         apt_cell_count = random.randint(min_cells, max_cells)
-        available_perimeter_cells = [cell for cell in remaining_cells if cell['is_corner']]
-        if not available_perimeter_cells:
+        if not self.initial_corner_cells:
             return None  # Нет доступных угловых клеток для начала апартамента
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
-        start_cell = random.choice(available_perimeter_cells)
-        queue = [start_cell]
         apartment_cells = []
         visited_cells = set()
-
+        if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
+            start_cell = self.queue_corners_to_allocate.pop()
+        else:
+            start_cell = self.initial_corner_cells.pop()
+        queue = [start_cell]
         while queue and len(apartment_cells) < apt_cell_count:
             current_cell = queue.pop(0)
             if current_cell['assigned']:
                 continue
-            cell_id = current_cell['id']
-            if cell_id in visited_cells:
-                continue
-            visited_cells.add(cell_id)
+            visited_cells.add(current_cell['id'])
             apartment_cells.append(current_cell)
+
             current_cell['assigned'] = True
+            remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+
 
             # Получаем не назначенные соседние клетки
             neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
@@ -228,6 +230,7 @@ class Floor(GeometricFigure):
             # Добавляем отсортированных соседей в очередь
             queue.extend(neighbors_sorted)
 
+
         # Проверка, удалось ли выделить нужное количество клеток
         if len(apartment_cells) < min_cells:
             # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
@@ -236,6 +239,24 @@ class Floor(GeometricFigure):
             return None
 
         return apartment_cells
+
+
+    def _update_cell_properties(self, apartment_cells):
+        """Updates the properties of cells based on the allocated apartment cells."""
+        for cell in apartment_cells:
+            if cell['on_perimeter']:
+                perimeter_neighbors_for_new_corner = [neighbor for neighbor in cell['neighbors'] if
+                                       neighbor['assigned'] == False and neighbor['on_perimeter']]
+                if len(perimeter_neighbors_for_new_corner) > 0:
+                    for cell_for_new_corner in perimeter_neighbors_for_new_corner:
+                        cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
+                        self.queue_corners_to_allocate.append(cell_for_new_corner)
+
+
+
+
+
+
 
     def _calculate_total_error(self, apartments, apartment_table):
         """Calculates the total error in apartment type distribution among allocated area."""
@@ -264,3 +285,23 @@ class Floor(GeometricFigure):
             for apt_type in apartment_table.keys()
         )
         return total_error
+
+    # def calculate_distance(self, point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
+    #
+    #     x1, y1 = point1.id
+    #     x2, y2 = point2.id
+    #     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+    #
+    # def _check_perimeter_for_queue(self, apartment_cells):
+    #     current_cell = self.queue_corners_to_allocate[-1]
+    #     distances = []
+    #     if self.initial_corner_cells is not None:
+    #         for cell in self.initial_corner_cells:
+    #             current_distance = self.calculate_distance(current_cell, cell)
+    #             distances.append(current_distance)
+    #
+    #     if len(distances) > 0 :
+    #         min(distances)
+
+
+

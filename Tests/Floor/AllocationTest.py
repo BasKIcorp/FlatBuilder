@@ -12,23 +12,23 @@ floor = Floor(floor_points)
 # Таблица квартир
 apartment_table = {
     'studio': {
-        'area_range': (250, 300),
-        'percent': 20
-    },
-    '1 room': {
         'area_range': (300, 400),
         'percent': 20
     },
-    '2 room': {
-        'area_range': (400, 500),
-        'percent': 20
-    },
-    '3 room': {
+    '1 room': {
         'area_range': (500, 600),
         'percent': 20
     },
+    '2 room': {
+        'area_range': (800, 900),
+        'percent': 20
+    },
+    '3 room': {
+        'area_range': (1000, 1100),
+        'percent': 20
+    },
     '4 room': {
-        'area_range': (600, 700),
+        'area_range': (1200, 1300),
         'percent': 20
     },
 }
@@ -73,3 +73,4 @@ ax.legend(handles=legend_elements, loc='upper right')
 
 plt.title('Размещение квартир на этаже')
 plt.show()
+

@@ -117,9 +117,17 @@ class GeometricFigure:
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
 
+            # if cell['on_perimeter']:
+            #     perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
+            #     if perimeter_neighbors == 2:
+            #         cell['is_corner'] = True
+            #     else:
+            #         cell['is_corner'] = False
+
+
             # Check if the cell is a corner (on the perimeter and has fewer than two perimeter neighbors)
             if cell['on_perimeter']:
                 perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
-                cell['is_corner'] = len(perimeter_neighbors) < 2
+                cell['is_corner'] = len(perimeter_neighbors) == 2
             else:
                 cell['is_corner'] = False
