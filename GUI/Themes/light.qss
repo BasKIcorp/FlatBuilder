@@ -17,3 +17,14 @@ QPushButton:focus {
 QPushButton:disabled {
   background-color: gray;
 }
+QPushButton:checked {
+    background-color: #bababa;
+    color: black;
+    border: 1px solid #8f8f91;
+    border-bottom: 1px solid #8f8f91;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    font-weight: bold;
+}
+QComboBox {
+}

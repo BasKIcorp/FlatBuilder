@@ -1,7 +1,8 @@
 import sys
 
-from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsPolygonItem
+from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainterPath
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsEllipseItem, QGraphicsLineItem, QGraphicsPolygonItem, \
+    QGraphicsPathItem
 from PyQt5.QtCore import Qt, QPointF, QObject, pyqtSignal
 import math
 from threading import Thread
@@ -22,7 +23,7 @@ class Worker(QObject):
         self.apartment_table = apartment_table
 
     def run(self):
-        self.floor.generatePlanning(self.apartment_table)
+        self.floor.generatePlanning(self.apartment_table, max_iterations=15)
         self.finished.emit(self.floor)  # Сигнал с результатом
 
 
@@ -83,6 +84,9 @@ class Painter(QGraphicsView):
         self.point_id_counter = 1
         self.zoom_factor = 1.15
         self.default_zoom = 2.0
+        self.hatched_polygon = None
+
+        self.setSceneRect(-300, -300, 300, 300)
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
 
@@ -109,9 +113,7 @@ class Painter(QGraphicsView):
         self.points.append(point)
 
     def update_shape(self):
-        if len(self.points) < 2:
-            return
-
+        # Calculate center and reorder points to form a polygon in clockwise order
         center = {'x': 0, 'y': 0}
         for point in self.points:
             center['x'] += point.get_position()[0] / len(self.points)
@@ -125,12 +127,7 @@ class Painter(QGraphicsView):
 
         self.points.sort(key=clockwise_angle)
 
-        for idx, point in enumerate(self.points):
-            point.point_id = idx + 1
-            x, y = point.get_position()
-            print(x, y, point.point_id)
-        print("\n")
-
+        # Update lines connecting the points
         for line in self.lines:
             self.scene.removeItem(line)
         self.lines.clear()
@@ -197,11 +194,11 @@ class Painter(QGraphicsView):
 
         # Добавляем квартиры на сцену
         for apt in floor.apartments:
-            poly = apt['geometry']
+            poly = apt.polygon
             x, y = poly.exterior.xy
             poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
             polygon = QPolygonF(poly_points)
 
             filled_shape = QGraphicsPolygonItem(polygon)
-            filled_shape.setBrush(QBrush(QColor(apt_colors[apt['type']])))
+            filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
             self.scene.addItem(filled_shape)
