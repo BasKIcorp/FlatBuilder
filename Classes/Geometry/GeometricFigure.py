@@ -22,6 +22,11 @@ class GeometricFigure:
             area += x1 * y2 - x2 * y1
         return abs(area) / 2.0
 
+    def _reset_cell_assignments(self):
+        """Resets the 'assigned' status of all cells in the grid."""
+        for cell in self.cells:
+            cell['assigned'] = False
+
     def perimeter(self) -> float:
         """Calculates the perimeter of the polygon as the sum of distances between adjacent points."""
         n = len(self.points)
@@ -103,11 +108,26 @@ class GeometricFigure:
             if cell_polygon.exterior.intersects(exterior):
                 cell['on_perimeter'] = True
 
-            # Find neighbors
+            # Find neighbors, including diagonal neighbors
             neighbors = []
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (-1, 1), (1, -1)]:
                 ni, nj = i + dx, j + dy
                 if (ni, nj) in self.cell_dict:
                     neighbor = self.cell_dict[(ni, nj)]
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
+
+            # if cell['on_perimeter']:
+            #     perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
+            #     if perimeter_neighbors == 2:
+            #         cell['is_corner'] = True
+            #     else:
+            #         cell['is_corner'] = False
+
+
+            # Check if the cell is a corner (on the perimeter and has fewer than two perimeter neighbors)
+            if cell['on_perimeter']:
+                perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
+                cell['is_corner'] = len(perimeter_neighbors) == 2
+            else:
+                cell['is_corner'] = False
