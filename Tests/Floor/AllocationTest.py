@@ -1,13 +1,19 @@
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon
-from shapely.ops import cascaded_union
 from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
 from Classes.Geometry.Territory.Floor.Floor import Floor
 
-# Создаем объект этажа
-floor_points = [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)]  # Пример полигона этажа
-floor = Floor(floor_points)
+# Полигоны этажей
+floor_polygons = [
+    [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
+    [(0, 0), (0, 100), (100, 100), (100, 70), (60, 70), (60, 0)],
+    [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)],
+    [(100, 0), (100, 25), (90, 20), (80, 15), (70, 25), (65, 35), (60, 40),
+     (50, 50), (40, 60), (40, 70), (50, 80), (60, 90), (75,100), (50, 100), (25, 80), (15, 60), (0, 0)]
+]
+
+
 
 # Таблица квартир
 apartment_table = {
@@ -33,15 +39,16 @@ apartment_table = {
     },
 }
 
-# Генерация планировки
-planning = floor.generatePlanning(apartment_table, max_iterations=15)
+# Создаем фигуры для каждого этажа и генерируем план
+figures = []
+for points in floor_polygons:
+    floor = Floor(points)
+    floor._set_lift([(50, 50), (55, 50), (55, 45), (50, 45)])
+    planning = floor.generatePlanning(apartment_table, max_iterations=50)
+    figures.append(floor)
 
 # Визуализация
-fig, ax = plt.subplots(figsize=(10, 8))
-
-# Отображение основного полигона этажа
-x, y = floor.polygon.exterior.xy
-ax.plot(x, y, color='black')
+fig, axs = plt.subplots(nrows=1, ncols=len(figures), figsize=(15, 8))
 
 # Цвета для разных типов квартир
 apt_colors = {
@@ -52,24 +59,30 @@ apt_colors = {
     '4 room': 'purple'
 }
 
-# Отображение квартир
-for apt in floor.apartments:
-    poly = apt.polygon
-    x, y = poly.exterior.xy
-    ax.fill(x, y, alpha=0.5, facecolor=apt_colors[apt.type], edgecolor='black')
-    # Вычисляем центр полигона для размещения метки
-    centroid = poly.centroid
-    ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
+for ax, floor in zip(axs, figures):
+    # Отображение основного полигона этажа
+    x, y = floor.polygon.exterior.xy
+    ax.plot(x, y, color='black')
 
-# Настройка графика
-ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)
-ax.set_ylim(floor.polygon.bounds[1] - 10, floor.polygon.bounds[3] + 10)
-ax.set_aspect('equal', adjustable='box')
+    # Отображение квартир
+    for apt in floor.apartments:
+        poly = apt.polygon
+        x, y = poly.exterior.xy
+        ax.fill(x, y, alpha=0.5, facecolor=apt_colors[apt.type], edgecolor='black')
+        # Вычисляем центр полигона для размещения метки
+        centroid = poly.centroid
+        ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
+
+    # Настройка графика
+    ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)
+    ax.set_ylim(floor.polygon.bounds[1] - 10, floor.polygon.bounds[3] + 10)
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_title('Размещение квартир на этаже')
 
 # Легенда
 legend_elements = [Line2D([0], [0], marker='s', color='w', label=apt_type,
                           markerfacecolor=apt_colors[apt_type], markersize=10) for apt_type in apt_colors]
-ax.legend(handles=legend_elements, loc='upper right')
+fig.legend(handles=legend_elements, loc='upper right')
 
-plt.title('Размещение квартир на этаже')
+plt.tight_layout()
 plt.show()

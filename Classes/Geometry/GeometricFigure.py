@@ -1,7 +1,7 @@
 import math
 from typing import List, Tuple
 import numpy as np
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, box, LineString
 from shapely.prepared import prep
 from shapely.vectorized import contains
 
@@ -26,6 +26,7 @@ class GeometricFigure:
         """Resets the 'assigned' status of all cells in the grid."""
         for cell in self.cells:
             cell['assigned'] = False
+        # self._process_cells()
 
     def perimeter(self) -> float:
         """Calculates the perimeter of the polygon as the sum of distances between adjacent points."""
@@ -36,6 +37,9 @@ class GeometricFigure:
             x2, y2 = self.points[(i + 1) % n]  # Next point (with cyclic wrap-around)
             perimeter += math.hypot(x2 - x1, y2 - y1)
         return perimeter
+
+    def set_cells(self, cells):
+        self.cells = cells
 
     def create_cell_grid(self, cell_size: float):
         """Creates a grid of cells covering the polygon and stores it in the object.
@@ -97,9 +101,6 @@ class GeometricFigure:
         polygon_prepared = prep(self.polygon)
         exterior = self.polygon.exterior
 
-        # Create a set of cell IDs for quick lookup
-        cell_ids = set(cell['id'] for cell in self.cells)
-
         for cell in self.cells:
             i, j = cell['id']
             cell_polygon = cell['polygon']
@@ -117,17 +118,19 @@ class GeometricFigure:
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
 
-            # if cell['on_perimeter']:
-            #     perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
-            #     if perimeter_neighbors == 2:
-            #         cell['is_corner'] = True
-            #     else:
-            #         cell['is_corner'] = False
-
-
-            # Check if the cell is a corner (on the perimeter and has fewer than two perimeter neighbors)
+            # Check if the cell is a corner
             if cell['on_perimeter']:
-                perimeter_neighbors = [n for n in neighbors if n.get('on_perimeter', False)]
-                cell['is_corner'] = len(perimeter_neighbors) == 2
+                intersection_count = 0
+                coords = list(cell_polygon.exterior.coords)
+                num_coords = len(coords)
+
+                # Check each edge of the cell polygon
+                for k in range(num_coords):
+                    line_segment = LineString([coords[k], coords[(k + 1) % num_coords]])
+                    if line_segment.intersects(exterior):
+                        intersection_count += 1
+
+                # A corner cell must intersect with at least two edges of the exterior
+                cell['is_corner'] = intersection_count >= 2
             else:
                 cell['is_corner'] = False

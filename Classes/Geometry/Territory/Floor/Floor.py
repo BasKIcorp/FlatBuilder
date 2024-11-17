@@ -15,7 +15,7 @@ import math
 import time
 import numpy as np
 
-from Tests.Floor.CellAnimTest import floor
+
 
 
 class Floor(GeometricFigure):
@@ -27,8 +27,8 @@ class Floor(GeometricFigure):
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
 
+    def generatePlanning(self, apartment_table, max_iterations=150, cell_size=2):
 
-    def generatePlanning(self, apartment_table, max_iterations=50, cell_size=2):
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -41,19 +41,23 @@ class Floor(GeometricFigure):
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
-            print(f"Iteration number {iteration}")
-            self._reset_cell_assignments()
 
+
+            # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells, apartment_table)
 
             # **Validation**: Validate apartments for free sides
             if not apartments:
+                for apart in apartments:
+                    apart._reset_cell_assignments()
                 continue  # No apartments allocated in this iteration
 
             if not self._validate_apartments_free_sides(apartments):
                 # Allocation is invalid, skip to next iteration
                 # print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
+                for apart in apartments:
+                    apart._reset_cell_assignments()
                 continue
 
             # Calculate distribution error
@@ -64,12 +68,15 @@ class Floor(GeometricFigure):
                 best_score = total_error
                 best_plan = apartments
                 print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
+            for apart in apartments:
+                apart._reset_cell_assignments()
 
             # Early exit if perfect plan is found
             if best_score == 0:
                 break
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
+
         total_time = time.time() - start_time
         print(f"Floor planning completed in {total_time:.2f} seconds.")
 
@@ -90,41 +97,42 @@ class Floor(GeometricFigure):
         # Calculate the number of cells for each apartment type
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
 
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in reversed(apartment_table.items()):
 
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
+
             while allocated_cell_count >= min_cells:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
                 self._update_cell_properties(apartment_cells)
-                #
+
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
 
-                # First Validation: Check if apartment has at least one side adjacent to the external perimeter
+                # Проверяем тип полигона
+                if isinstance(apartment_polygon, Polygon):  # Если это Polygon
+                    points = list(apartment_polygon.exterior.coords)
+                elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
+                    # Вы можете обработать все полигоны или выбрать один из них
+                    # Для примера выбираем первый
+                    points = list(apartment_polygon.geoms[0].exterior.coords)
+                else:
+                    continue  # Если ни то, ни другое, пропускаем
 
-
-                # Create an Apartment object
-                points = list(apartment_polygon.exterior.coords)
-                rooms = []  # Placeholder for rooms
-                wet_areas = []  # Placeholder for wet areas
-                balconies = []  # Placeholder for balconies
+                # Создаем объект Apartment
+                rooms = []  # Плейсхолдер для комнат
+                wet_areas = []  # Плейсхолдер для мокрых зон
+                balconies = []  # Плейсхолдер для балконов
 
                 apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas,
                                       balconies=balconies)
-
+                apartment.cells = apartment_cells
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
-
-                # Update the list of remaining cells
-
-                # Update cell properties after adding the apartment
-                print(apt_type)
-
 
         return apartments
 
@@ -169,7 +177,7 @@ class Floor(GeometricFigure):
 
     def _calculate_cell_counts(self, apartment_table, cells):
         """Calculates the number of cells to allocate for each apartment type."""
-        total_area = 0.7 * self.polygon.area
+        total_area = self.polygon.area
         cell_area = cells[0]['polygon'].area if cells else 0
         cell_counts = {}
         for apt_type, apt_info in apartment_table.items():
@@ -216,7 +224,6 @@ class Floor(GeometricFigure):
             current_cell['assigned'] = True
             remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
 
-
             # Получаем не назначенные соседние клетки
             neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
 
@@ -230,7 +237,6 @@ class Floor(GeometricFigure):
             # Добавляем отсортированных соседей в очередь
             queue.extend(neighbors_sorted)
 
-
         # Проверка, удалось ли выделить нужное количество клеток
         if len(apartment_cells) < min_cells:
             # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
@@ -240,23 +246,16 @@ class Floor(GeometricFigure):
 
         return apartment_cells
 
-
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""
         for cell in apartment_cells:
             if cell['on_perimeter']:
                 perimeter_neighbors_for_new_corner = [neighbor for neighbor in cell['neighbors'] if
-                                       neighbor['assigned'] == False and neighbor['on_perimeter']]
+                                                      neighbor['assigned'] == False and neighbor['on_perimeter']]
                 if len(perimeter_neighbors_for_new_corner) > 0:
                     for cell_for_new_corner in perimeter_neighbors_for_new_corner:
                         cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
                         self.queue_corners_to_allocate.append(cell_for_new_corner)
-
-
-
-
-
-
 
     def _calculate_total_error(self, apartments, apartment_table):
         """Calculates the total error in apartment type distribution among allocated area."""
@@ -286,22 +285,9 @@ class Floor(GeometricFigure):
         )
         return total_error
 
-    # def calculate_distance(self, point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
-    #
-    #     x1, y1 = point1.id
-    #     x2, y2 = point2.id
-    #     return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-    #
-    # def _check_perimeter_for_queue(self, apartment_cells):
-    #     current_cell = self.queue_corners_to_allocate[-1]
-    #     distances = []
-    #     if self.initial_corner_cells is not None:
-    #         for cell in self.initial_corner_cells:
-    #             current_distance = self.calculate_distance(current_cell, cell)
-    #             distances.append(current_distance)
-    #
-    #     if len(distances) > 0 :
-    #         min(distances)
+    def _set_lift(self, polygon):
+        coords = polygon
+
 
 
 
