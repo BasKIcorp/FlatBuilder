@@ -43,7 +43,7 @@ apartment_table = {
 figures = []
 for points in floor_polygons:
     floor = Floor(points, cell_size=2.0)
-    floor._set_stairs([(0, 0), (5, 0), (5, 5), (0, 5)])
+    floor._set_stairs([(0, 0), (0, 20), (20, 20), (20, 15), (12, 15), (12,0)])
     floor._set_elevator([(50, 50), (55, 50), (55, 45), (50, 45)])
     planning = floor.generatePlanning(apartment_table, max_iterations=50)
     figures.append(floor)
@@ -79,13 +79,11 @@ for ax, floor in zip(axs, figures):
 
     # Отображение лифтов
     for elevator in floor.elevators:
-        elevator_polygon = elevator['polygon']
-        x, y = elevator_polygon.exterior.xy
+        x, y = elevator.polygon.exterior.xy
         ax.fill(x, y, alpha=0.5, facecolor=apt_colors['elevator'], edgecolor='black')
 
     for stair in floor.stairs:
-        stair_polygon = stair['polygon']
-        x, y = stair_polygon.exterior.xy
+        x, y = stair.polygon.exterior.xy
         ax.fill(x, y, alpha=0.5, facecolor=apt_colors['stair'], edgecolor='black')
 
     # Настройка графика
