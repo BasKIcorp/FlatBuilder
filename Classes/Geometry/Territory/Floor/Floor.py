@@ -19,13 +19,17 @@ import numpy as np
 
 
 class Floor(GeometricFigure):
-    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None,
-                 elevators: List['Elevator'] = None, stairs: List['Stair'] = None):
+    def __init__(self, points: List[Tuple[float, float]],
+                 apartments: List['Apartment'] = None,
+                 elevators: List['Elevator'] = None,
+                 stairs: List['Stair'] = None,
+                 cell_size: float = 1.0):  # Добавлен параметр cell_size
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = elevators if elevators is not None else []
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
+        self.create_cell_grid(cell_size)
 
     def generatePlanning(self, apartment_table, max_iterations=150, cell_size=2):
 
@@ -37,7 +41,7 @@ class Floor(GeometricFigure):
         start_time = time.time()
 
         # Create the cell grid once
-        self.create_cell_grid(cell_size=self.cell_size)
+
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
@@ -285,8 +289,36 @@ class Floor(GeometricFigure):
         )
         return total_error
 
-    def _set_lift(self, polygon):
-        coords = polygon
+    def _inside_polygon_coords(self, coords: List[Tuple[float, float]]) -> Polygon:
+        """Создает полигон из заданных координат и проверяет, входит ли он в общий полигон этажа."""
+        polygon = Polygon(coords)
+        if self.polygon.contains(polygon):  # Проверяем, что созданный полигон целиком находится в полигоне этажа
+            return polygon
+        else:
+            # Если полигон не входит, можно вернуть None или выдать предупреждение
+            print("Полигон не входит в общий полигон этажа.")
+            return None
+
+    def _set_elevator(self, coords: List[Tuple[float, float]]):
+        """Создает лифт и назначает соответствующие клетки как занятые."""
+        elevator_polygon = self._inside_polygon_coords(coords)
+        if elevator_polygon is not None:
+            # Применяем логику для назначения клеток лифту
+            for cell in self.cells:
+                if elevator_polygon.intersects(cell['polygon']):
+                    cell['assigned'] = True  # Помечаем клетку как занятою
+                    self.elevators.append(cell)  # Добавляем клетку в список лифтов
+
+    def _set_stairs(self, coords: List[Tuple[float, float]]):
+        """Создает лифт и назначает соответствующие клетки как занятые."""
+        stair_polygon = self._inside_polygon_coords(coords)
+        if stair_polygon is not None:
+            # Применяем логику для назначения клеток лифту
+            for cell in self.cells:
+                if stair_polygon.intersects(cell['polygon']):
+                    cell['assigned'] = True  # Помечаем клетку как занятою
+                    self.stairs.append(cell)
+
 
 
 
