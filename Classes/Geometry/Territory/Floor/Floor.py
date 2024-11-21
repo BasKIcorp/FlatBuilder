@@ -27,7 +27,7 @@ class Floor(GeometricFigure):
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
 
-    def generatePlanning(self, apartment_table, max_iterations=150, cell_size=2):
+    def generatePlanning(self, apartment_table, max_iterations=150, cell_size=1):
 
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
@@ -76,6 +76,8 @@ class Floor(GeometricFigure):
                 break
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
+        for apt in self.apartments:
+            apt.generate_apartment_planning()
 
         total_time = time.time() - start_time
         print(f"Floor planning completed in {total_time:.2f} seconds.")
