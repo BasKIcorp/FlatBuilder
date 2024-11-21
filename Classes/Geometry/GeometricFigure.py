@@ -134,4 +134,3 @@ class GeometricFigure:
                 cell['is_corner'] = intersection_count >= 2
             else:
                 cell['is_corner'] = False
-

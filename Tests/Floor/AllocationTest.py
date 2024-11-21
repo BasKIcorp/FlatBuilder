@@ -42,25 +42,21 @@ apartment_table = {
 # Создаем фигуры для каждого этажа и генерируем план
 figures = []
 for points in floor_polygons:
-    floor = Floor(points, cell_size=2.0)
-    floor._set_stairs([(0, 0), (0, 20), (20, 20), (20, 15), (12, 15), (12,0)])
-    floor._set_elevator([(50, 50), (55, 50), (55, 45), (50, 45)])
+    floor = Floor(points)
+    floor._set_lift([(50, 50), (55, 50), (55, 45), (50, 45)])
     planning = floor.generatePlanning(apartment_table, max_iterations=50)
     figures.append(floor)
 
 # Визуализация
-# Визуализация
 fig, axs = plt.subplots(nrows=1, ncols=len(figures), figsize=(15, 8))
 
-# Цвета для разных типов квартир и лифтов
+# Цвета для разных типов квартир
 apt_colors = {
     'studio': 'red',
     '1 room': 'green',
     '2 room': 'blue',
     '3 room': 'orange',
-    '4 room': 'purple',
-    'elevator': 'yellow',
-    'stair': 'pink'
+    '4 room': 'purple'
 }
 
 for ax, floor in zip(axs, figures):
@@ -77,15 +73,6 @@ for ax, floor in zip(axs, figures):
         centroid = poly.centroid
         ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
 
-    # Отображение лифтов
-    for elevator in floor.elevators:
-        x, y = elevator.polygon.exterior.xy
-        ax.fill(x, y, alpha=0.5, facecolor=apt_colors['elevator'], edgecolor='black')
-
-    for stair in floor.stairs:
-        x, y = stair.polygon.exterior.xy
-        ax.fill(x, y, alpha=0.5, facecolor=apt_colors['stair'], edgecolor='black')
-
     # Настройка графика
     ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)
     ax.set_ylim(floor.polygon.bounds[1] - 10, floor.polygon.bounds[3] + 10)
@@ -94,8 +81,7 @@ for ax, floor in zip(axs, figures):
 
 # Легенда
 legend_elements = [Line2D([0], [0], marker='s', color='w', label=apt_type,
-                          markerfacecolor=apt_colors[apt_type], markersize=10)
-                   for apt_type in apt_colors]
+                          markerfacecolor=apt_colors[apt_type], markersize=10) for apt_type in apt_colors]
 fig.legend(handles=legend_elements, loc='upper right')
 
 plt.tight_layout()

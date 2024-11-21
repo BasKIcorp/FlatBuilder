@@ -19,17 +19,13 @@ import numpy as np
 
 
 class Floor(GeometricFigure):
-    def __init__(self, points: List[Tuple[float, float]],
-                 apartments: List['Apartment'] = None,
-                 elevators: List['Elevator'] = None,
-                 stairs: List['Stair'] = None,
-                 cell_size: float = 1.0):  # Добавлен параметр cell_size
+    def __init__(self, points: List[Tuple[float, float]], apartments: List['Apartment'] = None,
+                 elevators: List['Elevator'] = None, stairs: List['Stair'] = None):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = elevators if elevators is not None else []
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
-        self.create_cell_grid(cell_size)
 
     def generatePlanning(self, apartment_table, max_iterations=150, cell_size=2):
 
@@ -41,7 +37,7 @@ class Floor(GeometricFigure):
         start_time = time.time()
 
         # Create the cell grid once
-
+        self.create_cell_grid(cell_size=self.cell_size)
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
@@ -93,6 +89,7 @@ class Floor(GeometricFigure):
 
     def _allocate_apartments(self, cells, apartment_table):
         """Allocates cells to apartments according to the specified parameters."""
+
         apartments = []
         remaining_cells = [cell for cell in cells if not cell['assigned']]
         self.initial_corner_cells = [cell for cell in remaining_cells if cell['is_corner']]
@@ -101,47 +98,39 @@ class Floor(GeometricFigure):
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
 
         for apt_type, apt_info in reversed(apartment_table.items()):
+
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
 
             while allocated_cell_count >= min_cells:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
-
-                # После выделения квартир, мы проверяем на пересечение
-                if self._check_intersection_with_structures(apartment_cells):
-                    # Если есть пересечение, сбросьте назначение клеток и начните заново
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    apartment_cells = []
-                    continue  # Пропускаем итерацию и начинаем заново с новой квартиры
-
                 self._update_cell_properties(apartment_cells)
 
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
 
                 # Проверяем тип полигона
-                if isinstance(apartment_polygon, Polygon):
+                if isinstance(apartment_polygon, Polygon):  # Если это Polygon
                     points = list(apartment_polygon.exterior.coords)
-                elif isinstance(apartment_polygon, MultiPolygon):
+                elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
+                    # Вы можете обработать все полигоны или выбрать один из них
+                    # Для примера выбираем первый
                     points = list(apartment_polygon.geoms[0].exterior.coords)
                 else:
-                    continue
+                    continue  # Если ни то, ни другое, пропускаем
 
                 # Создаем объект Apartment
-                rooms = []
-                wet_areas = []
-                balconies = []
+                rooms = []  # Плейсхолдер для комнат
+                wet_areas = []  # Плейсхолдер для мокрых зон
+                balconies = []  # Плейсхолдер для балконов
 
                 apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas,
                                       balconies=balconies)
                 apartment.cells = apartment_cells
                 apartments.append(apartment)
-
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
 
@@ -296,52 +285,8 @@ class Floor(GeometricFigure):
         )
         return total_error
 
-    def _inside_polygon_coords(self, coords: List[Tuple[float, float]]) -> Polygon:
-        """Создает полигон из заданных координат и проверяет, входит ли он в общий полигон этажа."""
-        polygon = Polygon(coords)
-        if self.polygon.contains(polygon):  # Проверяем, что созданный полигон целиком находится в полигоне этажа
-            return polygon
-        else:
-            # Если полигон не входит, можно вернуть None или выдать предупреждение
-            print("Полигон не входит в общий полигон этажа.")
-            return None
-
-    def _set_elevator(self, coords: List[Tuple[float, float]]):
-        """Создает лифт и назначает соответствующие клетки как занятые."""
-        elevator_polygon = self._inside_polygon_coords(coords)
-        if elevator_polygon is not None:
-            elevator = Elevator(coords)
-            self.elevators.append(elevator)  # Добавляем лифт как объект
-            # Применяем логику для назначения клеток лифту
-            for cell in self.cells:
-                if elevator_polygon.intersects(cell['polygon']):
-                    cell['assigned'] = True  # Помечаем клетку как занятою
-
-    def _set_stairs(self, coords: List[Tuple[float, float]]):
-        """Создает лестницу и назначает соответствующие клетки как занятые."""
-        stair_polygon = self._inside_polygon_coords(coords)
-        if stair_polygon is not None:
-            stair = Stair(coords)
-            self.stairs.append(stair)  # Добавляем лестницу как объект
-            # Применяем логику для назначения клеток лестнице
-            for cell in self.cells:
-                if stair_polygon.intersects(cell['polygon']):
-                    cell['assigned'] = True  # Помечаем клетку как занятою
-
-    def _check_intersection_with_structures(self, apartment_cells):
-        """Проверяет, пересекаются ли выделенные клетки с лифтами или лестницами."""
-        for cell in apartment_cells:
-            cell_polygon = cell['polygon']
-            for elevator in self.elevators:
-                if elevator.polygon.intersects(cell_polygon):
-                    return True
-            for stair in self.stairs:
-                if stair.polygon.intersects(cell_polygon):
-                    return True
-        return False
-
-
-
+    def _set_lift(self, polygon):
+        coords = polygon
 
 
 
