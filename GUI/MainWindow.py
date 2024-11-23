@@ -2,7 +2,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QFont, QPainter
 from PyQt5.QtPrintSupport import QPrinter
 from PyQt5.QtWidgets import QGraphicsScene, QMainWindow, QPushButton, QWidget, QVBoxLayout, QFrame, \
-    QSplitter, QTableWidgetItem, QTableWidget, QLineEdit, QFileDialog, QLabel, QHBoxLayout, QComboBox
+    QSplitter, QTableWidgetItem, QTableWidget, QLineEdit, QFileDialog, QLabel, QHBoxLayout, QComboBox, QDialog, \
+    QCheckBox
 from GUI.Painter.Painter import Painter
 
 
@@ -54,6 +55,7 @@ class MainWindow(QMainWindow):
             area_from_edit.setValidator(int_validator)
             area_from_edit.setAlignment(Qt.AlignCenter)
             area_from_edit.setFont(font)
+            area_from_edit.setText("0")
             self.area_from.append(area_from_edit)
             self.table.setCellWidget(row, 1, area_from_edit)
 
@@ -61,6 +63,7 @@ class MainWindow(QMainWindow):
             area_to_edit.setValidator(int_validator)
             area_to_edit.setAlignment(Qt.AlignCenter)
             area_to_edit.setFont(font)
+            area_to_edit.setText("0")
             self.area_to.append(area_to_edit)
             self.table.setCellWidget(row, 2, area_to_edit)
 
@@ -68,6 +71,7 @@ class MainWindow(QMainWindow):
             percent_edit.setValidator(int_validator)
             percent_edit.setAlignment(Qt.AlignCenter)
             percent_edit.setFont(font)
+            percent_edit.setText("0")
             self.percent.append(percent_edit)
             self.table.setCellWidget(row, 3, percent_edit)
 
@@ -87,6 +91,7 @@ class MainWindow(QMainWindow):
         self.floor_edit.setValidator(int_validator)
         self.floor_edit.setFixedWidth(40)
         self.floor_edit.setFont(font)
+        self.floor_edit.setText("1")
 
         self.floor_label.setVisible(True)
         self.floor_edit.setVisible(True)
@@ -122,8 +127,18 @@ class MainWindow(QMainWindow):
         self.error_text.setFont(font)
         self.error_text.setFixedHeight(40)
 
+        font.setPointSize(9)
+        self.checkbox = QCheckBox(text="Показать квартиры")
+        self.checkbox.setVisible(False)
+        self.checkbox.stateChanged.connect(self.onStateChanged)
+        self.checkbox.setFont(font)
+        check_layout = QVBoxLayout()
+        check_layout.setAlignment(Qt.AlignTop)
+        check_layout.addWidget(self.checkbox)
+
         right_layout.addWidget(self.generate_button)
-        right_layout.addWidget(self.error_text, alignment=Qt.AlignTop)
+        right_layout.addWidget(self.error_text)
+        right_layout.addLayout(check_layout, Qt.AlignTop)
 
         bottom_buttons = QVBoxLayout()
         bottom_buttons.setAlignment(Qt.AlignBottom)
@@ -137,20 +152,23 @@ class MainWindow(QMainWindow):
                            "точку. Красное выделение - лифт, Желтое выделение - лестница")
 
         self.elevator_button = QPushButton("Добавить лифт")
-        self.elevator_button.clicked.connect(self.elevator_mode)
+        self.elevator_button.clicked.connect(lambda: self.show_rectangle_dialog("elevator"))
         self.elevator_button.setFixedWidth(200)
-        self.elevator_button.setCheckable(True)
 
         self.stairs_button = QPushButton("Добавить лестницу")
-        self.stairs_button.clicked.connect(self.stairs_mode)
+        self.stairs_button.clicked.connect(lambda: self.show_rectangle_dialog("stairs"))
         self.stairs_button.setFixedWidth(200)
-        self.stairs_button.setCheckable(True)
+
+        self.add_point_button = QPushButton("Добавить точку")
+        self.add_point_button.clicked.connect(self.graphics_view.add_preview_point)
+        self.add_point_button.setFixedWidth(200)
 
         modes_layout = QHBoxLayout()
         modes_layout.setAlignment(Qt.AlignLeft)
 
         modes_layout.addWidget(self.elevator_button)
         modes_layout.addWidget(self.stairs_button)
+        modes_layout.addWidget(self.add_point_button)
 
         left_layout.addLayout(modes_layout)
 
@@ -159,6 +177,8 @@ class MainWindow(QMainWindow):
         self.combo = QComboBox(self.graphics_view)
         self.combo.setFixedWidth(200)
         self.combo.setVisible(False)
+        self.combo.activated.connect(self.index_changed)
+
         left_layout.addWidget(self.graphics_view)
         right_widget.setLayout(right_layout)
         left_widget.setLayout(left_layout)
@@ -175,13 +195,29 @@ class MainWindow(QMainWindow):
 
         self.setFocus()
 
+        self.graphics_view.add_point(-100, -100)
+        self.graphics_view.add_point(-100, 100)
+        self.graphics_view.add_point(100, -100)
+        self.graphics_view.add_point(100, 100)
+        self.graphics_view.update_shape()
+
+    def index_changed(self, index):
+        self.graphics_view.show_floor(index, self.checkbox.isChecked())
+        self.combo.setCurrentIndex(index)
+
+    def onStateChanged(self):
+        self.graphics_view.show_floor(self.combo.currentIndex(), self.checkbox.isChecked())
+
     def after_generated(self):
         self.generate_button.setText("Сгенерировать другой вариант")
         self.generate_button.setEnabled(True)
         self.graphics_view.interactive = False
+        self.checkbox.setVisible(True)
         self.save_button.setVisible(True)
         self.clear_button.setVisible(True)
         self.combo.setVisible(True)
+        self.combo.clear()
+        self.error_text.setText("")
         for i in range(1, int(self.floor_edit.text()) + 1):
             self.combo.addItem(f"Этаж {i}")
 
@@ -192,34 +228,41 @@ class MainWindow(QMainWindow):
             if not self.floor_edit.text():
                 self.error_text.setText("Укажите количество этажей!")
             else:
-                try:
-                    apartment_table = {
-                        'studio': {
-                            'area_range': (int(self.area_from[0].text()), int(self.area_to[0].text())),
-                            'percent': int(self.percent[0].text())
-                        },
-                        '1 room': {
-                            'area_range': (int(self.area_from[1].text()), int(self.area_to[1].text())),
-                            'percent': int(self.percent[1].text())
-                        },
-                        '2 room': {
-                            'area_range': (int(self.area_from[2].text()), int(self.area_to[2].text())),
-                            'percent': int(self.percent[2].text())
-                        },
-                        '3 room': {
-                            'area_range': (int(self.area_from[3].text()), int(self.area_to[3].text())),
-                            'percent': int(self.percent[3].text())
-                        },
-                        '4 room': {
-                            'area_range': (int(self.area_from[4].text()), int(self.area_to[4].text())),
-                            'percent': int(self.percent[4].text())
-                        },
-                    }
-                    self.generate_button.setDisabled(True)
-                    self.error_text.setText("")
-                    self.graphics_view.fillApartments(apartment_table)
-                except ValueError:
+                apartment_table = {
+                    'studio': {
+                        'area_range': (int(self.area_from[0].text()), int(self.area_to[0].text())),
+                        'percent': int(self.percent[0].text())
+                    },
+                    '1 room': {
+                        'area_range': (int(self.area_from[1].text()), int(self.area_to[1].text())),
+                        'percent': int(self.percent[1].text())
+                    },
+                    '2 room': {
+                        'area_range': (int(self.area_from[2].text()), int(self.area_to[2].text())),
+                        'percent': int(self.percent[2].text())
+                    },
+                    '3 room': {
+                        'area_range': (int(self.area_from[3].text()), int(self.area_to[3].text())),
+                        'percent': int(self.percent[3].text())
+                    },
+                    '4 room': {
+                        'area_range': (int(self.area_from[4].text()), int(self.area_to[4].text())),
+                        'percent': int(self.percent[4].text())
+                    },
+                }
+                all_zero = True
+
+                for apartment, details in apartment_table.items():
+                    if any(value != 0 for key, value in details.items() if isinstance(value, int)):
+                        all_zero = False
+                        break
+
+                if all_zero:
                     self.error_text.setText("Введите параметры квартир!")
+                else:
+                    self.generate_button.setDisabled(True)
+                    self.error_text.setText("Генерация...")
+                    self.graphics_view.fillApartments(apartment_table, int(self.floor_edit.text()))
 
     def save_as_pdf(self):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf);;All Files (*)")
@@ -244,20 +287,46 @@ class MainWindow(QMainWindow):
         self.generate_button.setText("Сгенерировать")
         self.combo.setVisible(False)
 
-    def elevator_mode(self):
-        if self.elevator_button.isChecked():
-            self.stairs_button.setChecked(False)
-            self.graphics_view.polygon.mode = "elevator"
-        else:
-            self.stairs_button.setChecked(False)
-            self.elevator_button.setChecked(False)
-            self.graphics_view.polygon.mode = "none"
+    def show_rectangle_dialog(self, mode):
+        dialog = RectangleDialog()
+        if dialog.exec_():
+            size = dialog.get_size()
+            if size:
+                self.graphics_view.set_preview_rectangle(*size, mode)
+            else:
+                print("Неверный размер")
 
-    def stairs_mode(self):
-        if self.stairs_button.isChecked():
-            self.elevator_button.setChecked(False)
-            self.graphics_view.polygon.mode = "stairs"
-        else:
-            self.elevator_button.setChecked(False)
-            self.stairs_button.setChecked(False)
-            self.graphics_view.polygon.mode = "none"
+
+class RectangleDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Выберите размер")
+        self.setFixedSize(300, 200)
+        self.width_input = QLineEdit()
+        self.height_input = QLineEdit()
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Ширина, м:"))
+        layout.addWidget(self.width_input)
+        layout.addWidget(QLabel("Длина, м:"))
+        layout.addWidget(self.height_input)
+
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("OK")
+        cancel_button = QPushButton("Закрыть")
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+
+    def get_size(self):
+        try:
+            width = int(self.width_input.text())
+            height = int(self.height_input.text())
+            return width, height
+        except ValueError:
+            return None
