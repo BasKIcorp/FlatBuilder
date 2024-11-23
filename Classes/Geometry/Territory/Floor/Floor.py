@@ -33,7 +33,7 @@ class Floor(GeometricFigure):
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
         best_plan = None
-        best_score = float('inf')  # The lower, the better
+        best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
 
         # Create the cell grid once

@@ -8,9 +8,7 @@ from Classes.Geometry.Territory.Floor.Floor import Floor
 floor_polygons = [
     [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
     [(0, 0), (0, 100), (100, 100), (100, 70), (60, 70), (60, 0)],
-    [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)],
-    [(100, 0), (100, 25), (90, 20), (80, 15), (70, 25), (65, 35), (60, 40),
-     (50, 50), (40, 60), (40, 70), (50, 80), (60, 90), (75,100), (50, 100), (25, 80), (15, 60), (0, 0)]
+    [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
 ]
 
 
@@ -44,7 +42,7 @@ figures = []
 for points in floor_polygons:
     floor = Floor(points)
     floor._set_lift([(50, 50), (55, 50), (55, 45), (50, 45)])
-    planning = floor.generatePlanning(apartment_table, max_iterations=50)
+    planning = floor.generatePlanning(apartment_table, max_iterations=15)
     figures.append(floor)
 
 # Визуализация
