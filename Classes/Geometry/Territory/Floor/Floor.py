@@ -28,7 +28,7 @@ class Floor(GeometricFigure):
         self.queue_corners_to_allocate = []
 
     def generatePlanning(self, apartment_table, max_iterations=150, cell_size=1):
-
+        self.check_and_create_cell_grid(cell_size=1)
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -37,7 +37,7 @@ class Floor(GeometricFigure):
         start_time = time.time()
 
         # Create the cell grid once
-        self.create_cell_grid(cell_size=self.cell_size)
+
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
@@ -287,8 +287,51 @@ class Floor(GeometricFigure):
         )
         return total_error
 
-    def _set_lift(self, polygon):
-        coords = polygon
+    def _inside_polygon_coords(self, coords: List[Tuple[float, float]]) -> Polygon:
+        """Создает полигон из заданных координат и проверяет, входит ли он в общий полигон этажа."""
+        polygon = Polygon(coords)
+        if self.polygon.contains(polygon):  # Проверяем, что созданный полигон целиком находится в полигоне этажа
+            return polygon
+        else:
+            # Если полигон не входит, можно вернуть None или выдать предупреждение
+            print("Полигон не входит в общий полигон этажа.")
+            return None
+
+    def set_elevator(self, coords: List[Tuple[float, float]]):
+        """Создает лифт и назначает соответствующие клетки как занятые."""
+        self.check_and_create_cell_grid(cell_size=1)
+        elevator_polygon = self._inside_polygon_coords(coords)
+        if elevator_polygon is not None:
+            elevator = Elevator(coords)
+            self.elevators.append(elevator)  # Добавляем лифт как объект
+            # Применяем логику для назначения клеток лифту
+            for cell in self.cells:
+                if elevator_polygon.intersects(cell['polygon']):
+                    cell['assigned'] = True  # Помечаем клетку как занятою
+
+    def set_stairs(self, coords: List[Tuple[float, float]]):
+        """Создает лестницу и назначает соответствующие клетки как занятые."""
+        self.check_and_create_cell_grid(cell_size=1)
+        stair_polygon = self._inside_polygon_coords(coords)
+        if stair_polygon is not None:
+            stair = Stair(coords)
+            self.stairs.append(stair)  # Добавляем лестницу как объект
+            # Применяем логику для назначения клеток лестнице
+            for cell in self.cells:
+                if stair_polygon.intersects(cell['polygon']):
+                    cell['assigned'] = True  # Помечаем клетку как занятою
+
+    def _check_intersection_with_structures(self, apartment_cells):
+        """Проверяет, пересекаются ли выделенные клетки с лифтами или лестницами."""
+        for cell in apartment_cells:
+            cell_polygon = cell['polygon']
+            for elevator in self.elevators:
+                if elevator.polygon.intersects(cell_polygon):
+                    return True
+            for stair in self.stairs:
+                if stair.polygon.intersects(cell_polygon):
+                    return True
+        return False
 
 
 

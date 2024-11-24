@@ -41,59 +41,61 @@ class GeometricFigure:
     def set_cells(self, cells):
         self.cells = cells
 
-    def create_cell_grid(self, cell_size: float):
+    def check_and_create_cell_grid(self, cell_size: float):
         """Creates a grid of cells covering the polygon and stores it in the object.
 
         Args:
             cell_size (float): The size of each cell in meters.
         """
-        minx, miny, maxx, maxy = self.polygon.bounds
+        if self.cells is None:
+            minx, miny, maxx, maxy = self.polygon.bounds
 
-        # Create arrays of x and y coordinates
-        x_coords = np.arange(minx, maxx, cell_size)
-        y_coords = np.arange(miny, maxy, cell_size)
-        x_grid, y_grid = np.meshgrid(x_coords, y_coords)
+            # Create arrays of x and y coordinates
+            x_coords = np.arange(minx, maxx, cell_size)
+            y_coords = np.arange(miny, maxy, cell_size)
+            x_grid, y_grid = np.meshgrid(x_coords, y_coords)
 
-        # Flatten the grid arrays
-        x_flat = x_grid.ravel()
-        y_flat = y_grid.ravel()
+            # Flatten the grid arrays
+            x_flat = x_grid.ravel()
+            y_flat = y_grid.ravel()
 
-        # Create cell center points
-        x_centers = x_flat + cell_size / 2
-        y_centers = y_flat + cell_size / 2
+            # Create cell center points
+            x_centers = x_flat + cell_size / 2
+            y_centers = y_flat + cell_size / 2
 
-        # Use shapely.vectorized.contains to check which cell centers are inside the polygon
-        points_inside = contains(self.polygon, x_centers, y_centers)
+            # Use shapely.vectorized.contains to check which cell centers are inside the polygon
+            points_inside = contains(self.polygon, x_centers, y_centers)
 
-        # Filter the grid cells to only include those inside the polygon
-        cells = []
-        cell_dict = {}
-        indices = np.where(points_inside)[0]
-        for idx in indices:
-            i = int((x_flat[idx] - minx) / cell_size)
-            j = int((y_flat[idx] - miny) / cell_size)
-            x1 = x_flat[idx]
-            y1 = y_flat[idx]
-            x2 = x1 + cell_size
-            y2 = y1 + cell_size
-            cell_polygon = box(x1, y1, x2, y2)
+            # Filter the grid cells to only include those inside the polygon
+            cells = []
+            cell_dict = {}
+            indices = np.where(points_inside)[0]
+            for idx in indices:
+                i = int((x_flat[idx] - minx) / cell_size)
+                j = int((y_flat[idx] - miny) / cell_size)
+                x1 = x_flat[idx]
+                y1 = y_flat[idx]
+                x2 = x1 + cell_size
+                y2 = y1 + cell_size
+                cell_polygon = box(x1, y1, x2, y2)
 
-            cell = {
-                'polygon': cell_polygon,
-                'assigned': False,
-                'neighbors': [],
-                'id': (i, j),
-                'on_perimeter': False
-            }
-            cells.append(cell)
-            cell_dict[(i, j)] = cell
+                cell = {
+                    'polygon': cell_polygon,
+                    'assigned': False,
+                    'neighbors': [],
+                    'id': (i, j),
+                    'on_perimeter': False,
+                    'is_corner': False
+                }
+                cells.append(cell)
+                cell_dict[(i, j)] = cell
 
-        # Store the cells and cell_dict in the object
-        self.cells = cells
-        self.cell_dict = cell_dict
+            # Store the cells and cell_dict in the object
+            self.cells = cells
+            self.cell_dict = cell_dict
 
-        # Optionally, process cells to find neighbors and perimeter cells
-        self._process_cells()
+            # Optionally, process cells to find neighbors and perimeter cells
+            self._process_cells()
 
     def _process_cells(self):
         """Determines neighbors of cells and marks cells on the perimeter."""
@@ -118,19 +120,22 @@ class GeometricFigure:
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
 
-            # Check if the cell is a corner
+        for cell in self.cells:
             if cell['on_perimeter']:
-                intersection_count = 0
-                coords = list(cell_polygon.exterior.coords)
-                num_coords = len(coords)
+                i, j = cell["id"]
+                upper = self.cell_dict.get((i + 1, j + 1), None)
+                lower = self.cell_dict.get((i - 1, j - 1), None)
+                right = self.cell_dict.get((i + 1, j - 1), None)
+                left = self.cell_dict.get((i - 1, j + 1), None)
 
-                # Check each edge of the cell polygon
-                for k in range(num_coords):
-                    line_segment = LineString([coords[k], coords[(k + 1) % num_coords]])
-                    if line_segment.intersects(exterior):
-                        intersection_count += 1
+                # Проверяем все соседние клетки на 'on_perimeter'
+                on_perimeter = (upper is not None and upper['on_perimeter']) or \
+                               (lower is not None and lower['on_perimeter']) or \
+                               (right is not None and right['on_perimeter']) or \
+                               (left is not None and left['on_perimeter'])
 
-                # A corner cell must intersect with at least two edges of the exterior
-                cell['is_corner'] = intersection_count >= 2
-            else:
-                cell['is_corner'] = False
+                if on_perimeter:
+                    cell['is_corner'] = True
+                    cell['on_perimeter'] = True
+                else:
+                    cell['is_corner'] = False

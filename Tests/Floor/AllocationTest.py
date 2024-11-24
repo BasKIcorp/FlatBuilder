@@ -6,9 +6,10 @@ from Classes.Geometry.Territory.Floor.Floor import Floor
 
 # Полигоны этажей
 floor_polygons = [
-    [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
+    [(0, 0), (100, 0), (100, 100), (0, 100)],
+    # [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
     [(0, 0), (0, 100), (100, 100), (100, 70), (60, 70), (60, 0)],
-    [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
+    # [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
 ]
 
 
@@ -41,8 +42,10 @@ apartment_table = {
 figures = []
 for points in floor_polygons:
     floor = Floor(points)
-    floor._set_lift([(50, 50), (55, 50), (55, 45), (50, 45)])
+    floor.set_stairs([(0, 0), (0, 10), (10, 10), (10, 0)])
+    floor.set_elevator([(20, 100), (30, 100), (30, 90), (20, 90)])
     planning = floor.generatePlanning(apartment_table, max_iterations=15)
+    print(len([cell for cell in floor.cells if cell['on_perimeter']]))
     figures.append(floor)
 
 # Визуализация
@@ -54,7 +57,9 @@ apt_colors = {
     '1 room': 'green',
     '2 room': 'blue',
     '3 room': 'orange',
-    '4 room': 'purple'
+    '4 room': 'purple',
+    'elevator': 'yellow',
+    'stair': 'pink'
 }
 
 for ax, floor in zip(axs, figures):
@@ -70,6 +75,15 @@ for ax, floor in zip(axs, figures):
         # Вычисляем центр полигона для размещения метки
         centroid = poly.centroid
         ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
+
+    # Отображение лифтов
+    for elevator in floor.elevators:
+        x, y = elevator.polygon.exterior.xy
+        ax.fill(x, y, alpha=0.5, facecolor=apt_colors['elevator'], edgecolor='black')
+
+    for stair in floor.stairs:
+        x, y = stair.polygon.exterior.xy
+        ax.fill(x, y, alpha=0.5, facecolor=apt_colors['stair'], edgecolor='black')
 
     # Настройка графика
     ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)
