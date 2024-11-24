@@ -51,8 +51,10 @@ room_colors = {
 # Генерация планов этажей и сохранение квартир
 for i, points in enumerate(floor_polygons):
     floor = Floor(points)
-    planning = floor.generatePlanning(apartment_table, max_iterations=10)
+    floor.set_elevator([(50, 50), (60, 50), (60, 60), (50, 60)])
+    planning = floor.generatePlanning(apartment_table, max_iterations=13)
     floors.append(floor)
+
 
     # Отображение основного полигона этажа для комнат
     ax = axs[i]
@@ -69,6 +71,10 @@ for i, points in enumerate(floor_polygons):
             room_centroid = room.polygon.centroid
             ax.text(room_centroid.x, room_centroid.y, room.type,
                     horizontalalignment='center', verticalalignment='center', fontsize=8)
+
+    for elevator in floor.elevators:
+        x, y = elevator.polygon.exterior.xy
+        ax.fill(x, y, alpha=0.5, facecolor='yellow', edgecolor='black')  # Цвет для лифтов
 
     # Настройка графика для комнат
     ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)
@@ -88,6 +94,10 @@ for i, floor in enumerate(floors):
         ax.fill(poly.exterior.xy[0], poly.exterior.xy[1], alpha=0.25, facecolor='grey', edgecolor='black')
         centroid = poly.centroid
         ax.text(centroid.x, centroid.y, apt.type, horizontalalignment='center', verticalalignment='center', fontsize=8)
+
+    for elevator in floor.elevators:
+        x, y = elevator.polygon.exterior.xy
+        ax.fill(x, y, alpha=0.5, facecolor='yellow', edgecolor='black')  # Цвет для лифтов
 
     # Настройка графика для квартир
     ax.set_xlim(floor.polygon.bounds[0] - 10, floor.polygon.bounds[2] + 10)

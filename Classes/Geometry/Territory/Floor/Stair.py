@@ -7,3 +7,4 @@ class Stair(GeometricFigure):
         super().__init__(points)
         self.points = points
         self.polygon = Polygon(self.points)
+        self.check_and_create_cell_grid(cell_size=1)

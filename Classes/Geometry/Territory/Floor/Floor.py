@@ -14,6 +14,7 @@ from typing import List, Tuple
 import math
 import time
 import numpy as np
+from collections import deque
 
 
 
@@ -26,8 +27,11 @@ class Floor(GeometricFigure):
         self.elevators = elevators if elevators is not None else []
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
+        self.elevators_stairs_cells = []
 
     def generatePlanning(self, apartment_table, max_iterations=150, cell_size=1):
+        if len(self.elevators) > 0 or len(self.stairs) >0:
+            self.elevators_stairs_cells = [cell for cell in self.cells if cell['assigned_for_elevators_stairs']]
         self.check_and_create_cell_grid(cell_size=1)
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
@@ -59,6 +63,12 @@ class Floor(GeometricFigure):
                 for apart in apartments:
                     apart._reset_cell_assignments()
                 continue
+
+            # if len(self.stairs) > 0 or len(self.elevators) > 0:
+            #     if not self.find_path_to_lifts_or_stairs(apartments):
+            #         for apart in apartments:
+            #             apart._reset_cell_assignments()
+            #         continue
 
             # Calculate distribution error
             total_error = self._calculate_total_error(apartments, apartment_table)
@@ -106,9 +116,13 @@ class Floor(GeometricFigure):
 
             while allocated_cell_count >= min_cells:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
-                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
+                if self._check_intersection_with_structures(apartment_cells):
+                    for cell in apartment_cells:
+                        cell['assigned'] = False
+                    continue
+                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 self._update_cell_properties(apartment_cells)
 
                 # Create the apartment polygon
@@ -220,6 +234,7 @@ class Floor(GeometricFigure):
             current_cell = queue.pop(0)
             if current_cell['assigned']:
                 continue
+
             visited_cells.add(current_cell['id'])
             apartment_cells.append(current_cell)
 
@@ -290,7 +305,7 @@ class Floor(GeometricFigure):
     def _inside_polygon_coords(self, coords: List[Tuple[float, float]]) -> Polygon:
         """Создает полигон из заданных координат и проверяет, входит ли он в общий полигон этажа."""
         polygon = Polygon(coords)
-        if self.polygon.contains(polygon):  # Проверяем, что созданный полигон целиком находится в полигоне этажа
+        if self.polygon.contains(polygon.exterior):  # Проверяем, что созданный полигон целиком находится в полигоне этажа
             return polygon
         else:
             # Если полигон не входит, можно вернуть None или выдать предупреждение
@@ -306,8 +321,10 @@ class Floor(GeometricFigure):
             self.elevators.append(elevator)  # Добавляем лифт как объект
             # Применяем логику для назначения клеток лифту
             for cell in self.cells:
-                if elevator_polygon.intersects(cell['polygon']):
+                if elevator_polygon.intersects(cell['polygon'].exterior):
                     cell['assigned'] = True  # Помечаем клетку как занятою
+                    cell['assigned_for_elevators_stairs'] = True
+
 
     def set_stairs(self, coords: List[Tuple[float, float]]):
         """Создает лестницу и назначает соответствующие клетки как занятые."""
@@ -318,20 +335,61 @@ class Floor(GeometricFigure):
             self.stairs.append(stair)  # Добавляем лестницу как объект
             # Применяем логику для назначения клеток лестнице
             for cell in self.cells:
-                if stair_polygon.intersects(cell['polygon']):
+                if stair_polygon.intersects(cell['polygon'].exterior):
                     cell['assigned'] = True  # Помечаем клетку как занятою
+                    cell['assigned_for_elevators_stairs'] = True
+
+    # def find_path_to_lifts_or_stairs(self, apartments):
+    #     """Находит путь от квартир до лифтов или лестниц на этаже."""
+    #
+    #     # Создаем очередь для BFS
+    #
+    #     # Собираем клетки с квартирами и добавляем их в очередь
+    #     for apartment in apartments:
+    #         queue = deque()
+    #         visited = set()  # Чтобы отслеживать посетенные клетки
+    #         for cell in apartment.cells:
+    #             for neighbor in cell["neighbors"]:
+    #                 if not neighbor['assigned']:  # Если клетка свободна
+    #                     queue.append(neighbor)
+    #                     visited.add(neighbor['id'])  # Помечаем как посещенную
+    #         # BFS для поиска пути
+    #         while queue:
+    #             current_cell = queue.popleft()
+    #
+    #             # Проверяем, находится ли текущая клетка на лифте или лестнице
+    #             if len(self.elevators) > 0:
+    #                 for elevator in self.elevators:
+    #                     if current_cell["polygon"].exterior.intersects(elevator.polygon.exterior):
+    #                         break  # Путь найден
+    #
+    #             if len(self.stairs) > 0:
+    #                 for stair in self.stairs:
+    #                     if current_cell["polygon"].exterior.intersects(stair.polygon.exterior):
+    #                         break  # Путь найден
+    #
+    #             # Проверяем соседние клетки
+    #             for neighbor in current_cell['neighbors']:
+    #                 if not neighbor['assigned'] and neighbor['id'] not in visited:
+    #                     visited.add(neighbor['id'])  # Помечаем соседнюю клетку как посещенную
+    #                     queue.append(neighbor)
+    #         else:
+    #             # Путь не найден
+    #             print('No Way')
+    #             return False
+    #     print('Find a Way')
+    #     return True
 
     def _check_intersection_with_structures(self, apartment_cells):
         """Проверяет, пересекаются ли выделенные клетки с лифтами или лестницами."""
-        for cell in apartment_cells:
-            cell_polygon = cell['polygon']
-            for elevator in self.elevators:
-                if elevator.polygon.intersects(cell_polygon):
-                    return True
-            for stair in self.stairs:
-                if stair.polygon.intersects(cell_polygon):
+        for cell_apt in apartment_cells:
+            cell_polygon = cell_apt['polygon']
+            for cell in self.elevators_stairs_cells:
+                if cell["polygon"].exterior.intersects(cell_polygon):
                     return True
         return False
+
+
 
 
 

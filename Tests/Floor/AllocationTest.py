@@ -42,8 +42,8 @@ apartment_table = {
 figures = []
 for points in floor_polygons:
     floor = Floor(points)
-    floor.set_stairs([(0, 0), (0, 10), (10, 10), (10, 0)])
-    floor.set_elevator([(20, 100), (30, 100), (30, 90), (20, 90)])
+    #floor.set_stairs([(0, 0), (0, 10), (10, 10), (10, 0)])
+    floor.set_elevator([(50, 50), (60, 50), (60, 60), (50, 60)])
     planning = floor.generatePlanning(apartment_table, max_iterations=15)
     print(len([cell for cell in floor.cells if cell['on_perimeter']]))
     figures.append(floor)

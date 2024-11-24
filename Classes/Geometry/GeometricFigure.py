@@ -85,7 +85,8 @@ class GeometricFigure:
                     'neighbors': [],
                     'id': (i, j),
                     'on_perimeter': False,
-                    'is_corner': False
+                    'is_corner': False,
+                    'assigned_for_elevators_stairs': False
                 }
                 cells.append(cell)
                 cell_dict[(i, j)] = cell
