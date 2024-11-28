@@ -26,7 +26,7 @@ class GeometricFigure:
         """Resets the 'assigned' status of all cells in the grid."""
         for cell in self.cells:
             cell['assigned'] = False
-        # self._process_cells()
+        #self._process_cells()
 
     def perimeter(self) -> float:
         """Calculates the perimeter of the polygon as the sum of distances between adjacent points."""
@@ -111,6 +111,24 @@ class GeometricFigure:
             # Check if the cell touches the exterior boundary
             if cell_polygon.exterior.intersects(exterior):
                 cell['on_perimeter'] = True
+                # Проверяем угловые клетки
+                edges = list(exterior.coords)
+                intersection_count = 0
+
+                for k in range(len(edges) - 1):
+                    # Получаем координаты рёбер
+                    x1, y1 = edges[k]
+                    x2, y2 = edges[k + 1]
+
+                    # Проверяем пересечение с ребром
+                    if cell_polygon.intersects(LineString([(x1, y1), (x2, y2)])):
+                        intersection_count += 1
+
+                # Если пересекает два или более рёбер, помечаем как угловую
+                cell['is_corner'] = intersection_count >= 2
+            else:
+                cell['is_corner'] = False
+
 
             # Find neighbors, including diagonal neighbors
             neighbors = []
@@ -121,22 +139,4 @@ class GeometricFigure:
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
 
-        for cell in self.cells:
-            if cell['on_perimeter']:
-                i, j = cell["id"]
-                upper = self.cell_dict.get((i + 1, j + 1), None)
-                lower = self.cell_dict.get((i - 1, j - 1), None)
-                right = self.cell_dict.get((i + 1, j - 1), None)
-                left = self.cell_dict.get((i - 1, j + 1), None)
 
-                # Проверяем все соседние клетки на 'on_perimeter'
-                on_perimeter = (upper is not None and upper['on_perimeter']) or \
-                               (lower is not None and lower['on_perimeter']) or \
-                               (right is not None and right['on_perimeter']) or \
-                               (left is not None and left['on_perimeter'])
-
-                if on_perimeter:
-                    cell['is_corner'] = True
-                    cell['on_perimeter'] = True
-                else:
-                    cell['is_corner'] = False

@@ -1,3 +1,5 @@
+from turtledemo.penrose import start
+
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Apartment.Apartment import Apartment
 from Classes.Geometry.Territory.Apartment.Room import Room
@@ -29,11 +31,12 @@ class Floor(GeometricFigure):
         self.queue_corners_to_allocate = []
         self.elevators_stairs_cells = []
 
-    def generatePlanning(self, apartment_table, max_iterations=150, cell_size=1):
+    def generatePlanning(self, apartment_table, max_iterations=10, cell_size=1):
         if len(self.elevators) > 0 or len(self.stairs) >0:
             self.elevators_stairs_cells = [cell for cell in self.cells if cell['assigned_for_elevators_stairs']]
         self.check_and_create_cell_grid(cell_size=1)
         self.cell_size = cell_size
+        print(len([cell for cell in self.cells]))
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
         best_plan = None
@@ -55,6 +58,7 @@ class Floor(GeometricFigure):
             if not apartments:
                 for apart in apartments:
                     apart._reset_cell_assignments()
+                    self._process_cells()
                 continue  # No apartments allocated in this iteration
 
             if not self._validate_apartments_free_sides(apartments):
@@ -62,6 +66,7 @@ class Floor(GeometricFigure):
                 # print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
                 for apart in apartments:
                     apart._reset_cell_assignments()
+                    self._process_cells()
                 continue
 
             # if len(self.stairs) > 0 or len(self.elevators) > 0:
@@ -80,6 +85,7 @@ class Floor(GeometricFigure):
                 print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
             for apart in apartments:
                 apart._reset_cell_assignments()
+                self._process_cells()
 
             # Early exit if perfect plan is found
             if best_score == 0:
@@ -104,7 +110,7 @@ class Floor(GeometricFigure):
 
         apartments = []
         remaining_cells = [cell for cell in cells if not cell['assigned']]
-        self.initial_corner_cells = [cell for cell in remaining_cells if cell['is_corner']]
+        self.initial_corner_cells = [cell for cell in cells if cell['is_corner']]
 
         # Calculate the number of cells for each apartment type
         cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
@@ -118,10 +124,6 @@ class Floor(GeometricFigure):
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
-                if self._check_intersection_with_structures(apartment_cells):
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    continue
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 self._update_cell_properties(apartment_cells)
 
@@ -137,6 +139,11 @@ class Floor(GeometricFigure):
                     points = list(apartment_polygon.geoms[0].exterior.coords)
                 else:
                     continue  # Если ни то, ни другое, пропускаем
+
+                if self._check_intersection_with_structures(points):
+                    for cell in apartment_cells:
+                        cell['assigned'] = False
+                    continue
 
                 # Создаем объект Apartment
                 rooms = []  # Плейсхолдер для комнат
@@ -226,9 +233,13 @@ class Floor(GeometricFigure):
         apartment_cells = []
         visited_cells = set()
         if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
-            start_cell = self.queue_corners_to_allocate.pop()
+            random_index = random.randint(0, len(self.queue_corners_to_allocate) - 1)
+            start_cell = self.queue_corners_to_allocate.pop(random_index)
+        elif len(self.initial_corner_cells) > 0:
+            random_index = random.randint(0, len(self.initial_corner_cells) - 1)
+            start_cell = self.initial_corner_cells.pop(random_index)
         else:
-            start_cell = self.initial_corner_cells.pop()
+            start_cell = random.choice([cell for cell in remaining_cells if cell['on_perimeter']])
         queue = [start_cell]
         while queue and len(apartment_cells) < apt_cell_count:
             current_cell = queue.pop(0)
@@ -380,13 +391,12 @@ class Floor(GeometricFigure):
     #     print('Find a Way')
     #     return True
 
-    def _check_intersection_with_structures(self, apartment_cells):
+    def _check_intersection_with_structures(self, points):
         """Проверяет, пересекаются ли выделенные клетки с лифтами или лестницами."""
-        for cell_apt in apartment_cells:
-            cell_polygon = cell_apt['polygon']
-            for cell in self.elevators_stairs_cells:
-                if cell["polygon"].exterior.intersects(cell_polygon):
-                    return True
+        polygon_apt = Polygon(points)
+        for cell in self.elevators_stairs_cells:
+            if cell["polygon"].exterior.intersects(polygon_apt):
+                return True
         return False
 
 

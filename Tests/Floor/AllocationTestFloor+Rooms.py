@@ -5,32 +5,33 @@ from Classes.Geometry.Territory.Apartment.Apartment import Apartment
 from Classes.Geometry.Territory.Apartment.Room import Room
 
 # Полигоны этажей
-floor_polygons = [
-    [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
-    [(0, 0), (0, 100), (100, 100), (100, 70), (60, 70), (60, 0)],
-    [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
+floor_polygons = [[(0, 0), (0, 30), (35, 30), (35, 0)]
+    #[(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
+    # [(0, 0), (100, 0), (100, 80), (60, 80), (60, 100), (0, 100)],
+    # [(0, 0), (0, 100), (100, 100), (100, 70), (60, 70), (60, 0)],
+    # [(0, 0), (0, 100), (100, 100), (100, 0), (70, 0), (70, 50), (30, 50), (30, 0)]
 ]
 
 # Таблица квартир
 apartment_table = {
     'studio': {
-        'area_range': (300, 400),
+        'area_range': (30, 45),  # Уменьшение площади для студий
         'percent': 20
     },
     '1 room': {
-        'area_range': (500, 600),
+        'area_range': (40, 60),  # Площадь для однокомнатных квартир
         'percent': 20
     },
     '2 room': {
-        'area_range': (800, 900),
+        'area_range': (60, 90),  # Площадь для двухкомнатных квартир
         'percent': 20
     },
     '3 room': {
-        'area_range': (1000, 1100),
+        'area_range': (80, 120),  # Площадь для трехкомнатных квартир
         'percent': 20
     },
     '4 room': {
-        'area_range': (1200, 1300),
+        'area_range': (100, 160),  # Площадь для четырехкомнатных квартир
         'percent': 20
     },
 }
@@ -51,8 +52,8 @@ room_colors = {
 # Генерация планов этажей и сохранение квартир
 for i, points in enumerate(floor_polygons):
     floor = Floor(points)
-    floor.set_elevator([(50, 50), (60, 50), (60, 60), (50, 60)])
-    planning = floor.generatePlanning(apartment_table, max_iterations=13)
+    floor.set_elevator([(15, 15), (15, 20), (20, 20), (20, 15)])
+    planning = floor.generatePlanning(apartment_table, max_iterations=15)
     floors.append(floor)
 
 
