@@ -16,23 +16,28 @@ floor_polygons = [[(0, 0), (0, 30), (35, 30), (35, 0)]
 apartment_table = {
     'studio': {
         'area_range': (30, 45),  # Уменьшение площади для студий
-        'percent': 20
+        'percent': 20,
+        'number': 2
     },
     '1 room': {
         'area_range': (40, 60),  # Площадь для однокомнатных квартир
-        'percent': 20
+        'percent': 20,
+        'number': 3
     },
     '2 room': {
         'area_range': (60, 90),  # Площадь для двухкомнатных квартир
-        'percent': 20
+        'percent': 20,
+        'number': 2
     },
     '3 room': {
         'area_range': (80, 120),  # Площадь для трехкомнатных квартир
-        'percent': 20
+        'percent': 20,
+        'number': 1
     },
     '4 room': {
-        'area_range': (100, 160),  # Площадь для четырехкомнатных квартир
-        'percent': 20
+        'area_range': (100, 140),  # Площадь для четырехкомнатных квартир
+        'percent': 20,
+        'number': 2
     },
 }
 

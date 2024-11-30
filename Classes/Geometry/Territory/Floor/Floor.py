@@ -30,18 +30,24 @@ class Floor(GeometricFigure):
         self.stairs = stairs if stairs is not None else []
         self.queue_corners_to_allocate = []
         self.elevators_stairs_cells = []
+        self.free_cells = []
 
-    def generatePlanning(self, apartment_table, max_iterations=10, cell_size=1):
+    def generatePlanning(self, apartment_table, max_iterations=50, cell_size=1):
         if len(self.elevators) > 0 or len(self.stairs) >0:
             self.elevators_stairs_cells = [cell for cell in self.cells if cell['assigned_for_elevators_stairs']]
         self.check_and_create_cell_grid(cell_size=1)
         self.cell_size = cell_size
-        print(len([cell for cell in self.cells]))
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
+        valid_table, message = self.validate_apartment_table(apartment_table)
+        if not valid_table:
+            print(message)  # Печать причины, если планирование невозможно
+        else:
+            print("Планирование возможно!")
+
 
         # Create the cell grid once
 
@@ -49,7 +55,7 @@ class Floor(GeometricFigure):
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
 
-
+            self.queue_corners_to_allocate = []
             # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells, apartment_table)
@@ -82,6 +88,7 @@ class Floor(GeometricFigure):
             if total_error < best_score:
                 best_score = total_error
                 best_plan = apartments
+                self.free_cells = [cell for cell in self.cells if not cell["assigned"]]
                 print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
             for apart in apartments:
                 apart._reset_cell_assignments()
@@ -119,13 +126,14 @@ class Floor(GeometricFigure):
 
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
-
-            while allocated_cell_count >= min_cells:
+            number = apt_info['number']
+            minimum = min_cells * number
+            while number > 0 or allocated_cell_count > minimum:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                self._update_cell_properties(apartment_cells)
+
 
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
@@ -134,17 +142,17 @@ class Floor(GeometricFigure):
                 if isinstance(apartment_polygon, Polygon):  # Если это Polygon
                     points = list(apartment_polygon.exterior.coords)
                 elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
-                    # Вы можете обработать все полигоны или выбрать один из них
-                    # Для примера выбираем первый
-                    points = list(apartment_polygon.geoms[0].exterior.coords)
-                else:
-                    continue  # Если ни то, ни другое, пропускаем
-
-                if self._check_intersection_with_structures(points):
                     for cell in apartment_cells:
                         cell['assigned'] = False
+                    remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                     continue
 
+                # if self._check_intersection_with_structures(points):
+                #     for cell in apartment_cells:
+                #         cell['assigned'] = False
+                #     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+                #     continue
+                self._update_cell_properties(apartment_cells)
                 # Создаем объект Apartment
                 rooms = []  # Плейсхолдер для комнат
                 wet_areas = []  # Плейсхолдер для мокрых зон
@@ -156,6 +164,7 @@ class Floor(GeometricFigure):
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
+                number -= 1
 
         return apartments
 
@@ -203,9 +212,21 @@ class Floor(GeometricFigure):
         total_area = self.polygon.area
         cell_area = cells[0]['polygon'].area if cells else 0
         cell_counts = {}
+        total_area_min = {apt_type: 0 for apt_type in apartment_table.keys()}
+        total_area_max = {apt_type: 0 for apt_type in apartment_table.keys()}
         for apt_type, apt_info in apartment_table.items():
+            number = apt_info['number']
+            area_range = apt_info['area_range']
+            min_cells = area_range[0]
+            max_cells = area_range[1]
+            total_area_min[apt_type] += number * min_cells
+            total_area_max[apt_type] += number * max_cells
+        for apt_type, apt_info in apartment_table.items():
+            number = apt_info['number']
             percent = apt_info['percent']
-            allocated_area = total_area * (percent / 100)
+            allocated_area_min = sum(total_area_min.values()) * percent / 100
+            allocated_area_max = sum(total_area_max.values()) * percent / 100
+            allocated_area = random.randint(allocated_area_min, allocated_area_max)
             allocated_cell_count = int(allocated_area / cell_area)
             cell_counts[apt_type] = allocated_cell_count
         remaining_cell_counts = cell_counts.copy()
@@ -226,20 +247,18 @@ class Floor(GeometricFigure):
         """
 
         apt_cell_count = random.randint(min_cells, max_cells)
-        if not self.initial_corner_cells:
-            return None  # Нет доступных угловых клеток для начала апартамента
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
         visited_cells = set()
         if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
-            random_index = random.randint(0, len(self.queue_corners_to_allocate) - 1)
-            start_cell = self.queue_corners_to_allocate.pop(random_index)
+            start_cell = random.choice(self.queue_corners_to_allocate)
+            self.queue_corners_to_allocate.remove(start_cell)  # Удаляем выбранный элемент из списка
         elif len(self.initial_corner_cells) > 0:
-            random_index = random.randint(0, len(self.initial_corner_cells) - 1)
-            start_cell = self.initial_corner_cells.pop(random_index)
+            start_cell = random.choice(self.initial_corner_cells)
+            self.initial_corner_cells.remove(start_cell)  # Удаляем выбранный элемент из списка
         else:
-            start_cell = random.choice([cell for cell in remaining_cells if cell['on_perimeter']])
+            start_cell = random.choice([cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']])
         queue = [start_cell]
         while queue and len(apartment_cells) < apt_cell_count:
             current_cell = queue.pop(0)
@@ -330,11 +349,13 @@ class Floor(GeometricFigure):
         if elevator_polygon is not None:
             elevator = Elevator(coords)
             self.elevators.append(elevator)  # Добавляем лифт как объект
+
             # Применяем логику для назначения клеток лифту
             for cell in self.cells:
-                if elevator_polygon.intersects(cell['polygon'].exterior):
-                    cell['assigned'] = True  # Помечаем клетку как занятою
+                if elevator_polygon.contains(cell['polygon'].exterior):  # Проверяем, полностью ли клетка внутри лифта
+                    cell['assigned'] = True  # Помечаем клетку как занятую
                     cell['assigned_for_elevators_stairs'] = True
+
 
 
     def set_stairs(self, coords: List[Tuple[float, float]]):
@@ -346,7 +367,7 @@ class Floor(GeometricFigure):
             self.stairs.append(stair)  # Добавляем лестницу как объект
             # Применяем логику для назначения клеток лестнице
             for cell in self.cells:
-                if stair_polygon.intersects(cell['polygon'].exterior):
+                if stair_polygon.contains(cell['polygon'].exterior):
                     cell['assigned'] = True  # Помечаем клетку как занятою
                     cell['assigned_for_elevators_stairs'] = True
 
@@ -398,6 +419,67 @@ class Floor(GeometricFigure):
             if cell["polygon"].exterior.intersects(polygon_apt):
                 return True
         return False
+
+    def validate_apartment_table(self, apartment_table):
+        """Проверяет, возможно ли выделить квартиры с заданными 'number' и 'percent'."""
+        total_area = self.polygon.area  # Общая площадь этажа
+        total_required_area = 0  # Общая требуемая площадь для всех квартир
+        number_of_apartments = 0  # Общее количество квартир
+        apartment_min_areas = {}  # Минимальные площадки для расчетов
+
+        # Подсчет площади для заданной конфигурации
+        for apt_type, apt_info in apartment_table.items():
+            number = apt_info['number']
+            area_range = apt_info['area_range']
+
+            # Минимальная и максимальная площадь для данного типа квартир
+            min_area_for_type = area_range[0] * number
+            max_area_for_type = area_range[1] * number
+
+            apartment_min_areas[apt_type] = min_area_for_type
+
+            total_required_area += max_area_for_type
+            number_of_apartments += number
+
+        # Проверка на достаточно ли площади с учетом того что должно заниматься 20% коридором
+        if total_required_area > 0.8 * total_area:
+            return False, "Недостаточно площади для выделения всех типов квартир на заданной площади. Уменьшите количество квартир или площади квартир"
+
+        # Проверка по процентам на основе общей площади квартир
+        total_area_needed_by_percent = 0  # Общая площадь, требуемая по процентам
+
+        for apt_type, apt_info in apartment_table.items():
+            percent = apt_info['percent']
+
+            # Суммируем минимально необходимую площадь
+            total_area_needed_by_percent += apartment_min_areas[apt_type]
+
+            # Необходимая площадь для данного типа квартир по проценту
+            required_area_for_type = (percent / 100) * total_required_area
+
+            # Проверка по максимальной площади
+            if apartment_min_areas[apt_type] > required_area_for_type:
+                return False, f"{apt_type}: Минимальная площадь ({apartment_min_areas[apt_type]}) превышает выделяемую площадь по проценту ({required_area_for_type})."
+
+        # Рассчет альтернативных параметров для достижения меньшей ошибки
+        alternative_parameters = []
+        for apt_type, apt_info in apartment_table.items():
+            percent = apt_info['percent']
+            optimal_area = (percent / 100) * total_required_area  # Необходимая площадь по проценту
+
+            possible_min = apt_info['number'] * apt_info['area_range'][0]
+            possible_max = apt_info['number'] * apt_info['area_range'][1]
+
+            # Предложение оптимального числа квартир
+            if possible_max > optimal_area:
+                alternative_parameters.append({
+                    'type': apt_type,
+                    'optimal_number': max(0, int(optimal_area / apt_info['area_range'][1])),
+                    'min_area_needed': possible_min,
+                    'max_area_needed': possible_max
+                })
+
+        return True, alternative_parameters  # Возвращаем True и альтернативные параметры
 
 
 
