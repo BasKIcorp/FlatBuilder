@@ -1,7 +1,5 @@
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
-from Classes.Geometry.Territory.Floor.Floor import Floor
-import time
+from Classes.Geometry.Territory.Building.Floor.Floor import Floor
 import multiprocessing
 import numpy as np  # Импортируем numpy для вычисления регрессии
 

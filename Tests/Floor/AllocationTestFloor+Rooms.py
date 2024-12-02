@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from Classes.Geometry.Territory.Floor.Floor import Floor
-from Classes.Geometry.Territory.Apartment.Apartment import Apartment
-from Classes.Geometry.Territory.Apartment.Room import Room
+from Classes.Geometry.Territory.Building.Floor.Floor import Floor
 
 # Полигоны этажей
 floor_polygons = [[(0, 0), (0, 30), (35, 30), (35, 0)]

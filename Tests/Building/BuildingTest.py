@@ -1,9 +1,6 @@
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
-from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
-from Classes.Geometry.Territory.Building import Building  # Не забудьте изменить путь на актуальный
-from Classes.Geometry.Territory.Floor.Floor import Floor
+from Classes.Geometry.Territory.Building.Building import Building  # Не забудьте изменить путь на актуальный
 
 # Исходный полигон здания
 building_polygon = [(0, 0), (100, 0), (100, 80), (0, 80)]

@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
-from Classes.Geometry.Territory.Floor.Floor import Floor
+from Classes.Geometry.Territory.Building.Floor.Floor import Floor
 import time
 import numpy as np
 

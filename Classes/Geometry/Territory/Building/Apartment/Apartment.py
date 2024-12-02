@@ -1,11 +1,10 @@
 from Classes.Geometry.GeometricFigure import GeometricFigure
-from Classes.Geometry.Territory.Apartment.Room import Room
-from Classes.Geometry.Territory.Apartment.WetArea import WetArea
-from Classes.Geometry.Territory.Apartment.Balcony import Balcony
+from Classes.Geometry.Territory.Building.Apartment.Room import Room
+from Classes.Geometry.Territory.Building.Apartment.WetArea import WetArea
+from Classes.Geometry.Territory.Building.Apartment.Balcony import Balcony
 
 from typing import List, Tuple
 import random
-import time
 from shapely.geometry import Polygon, MultiPolygon
 from shapely.ops import unary_union
 import math

@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
-from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
-from Classes.Geometry.Territory.Floor.Floor import Floor
+from Classes.Geometry.Territory.Building.Floor.Floor import Floor
 
 # Полигоны этажей
 floor_polygons = [
@@ -19,27 +17,27 @@ apartment_table = {
     'studio': {
         'area_range': (30, 45),  # Уменьшение площади для студий
         'percent': 20,
-        'number': 2
+        'number': 200
     },
     '1 room': {
         'area_range': (40, 60),  # Площадь для однокомнатных квартир
         'percent': 20,
-        'number': 3
+        'number': 300
     },
     '2 room': {
         'area_range': (60, 90),  # Площадь для двухкомнатных квартир
         'percent': 20,
-        'number': 2
+        'number': 200
     },
     '3 room': {
         'area_range': (80, 120),  # Площадь для трехкомнатных квартир
         'percent': 20,
-        'number': 1
+        'number': 100
     },
     '4 room': {
         'area_range': (100, 140),  # Площадь для четырехкомнатных квартир
         'percent': 20,
-        'number': 2
+        'number': 200
     },
 }
 

@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
-from shapely.geometry import Polygon
-from matplotlib.patches import Polygon as MplPolygon
 from matplotlib.lines import Line2D
-from Classes.Geometry.Territory.Apartment.Apartment import Apartment
+from Classes.Geometry.Territory.Building.Apartment.Apartment import Apartment
 
 # Определяем полигоны квартир
 # Определяем полигоны квартир с более реалистичными размерами

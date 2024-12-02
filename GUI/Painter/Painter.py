@@ -1,14 +1,13 @@
 from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsLineItem, QGraphicsPolygonItem, \
-    QGraphicsRectItem, QGraphicsItemGroup
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QRectF, QPoint
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint
 import math
 from threading import Thread
 
-from Classes.Geometry.Territory.Building import Building
-from Classes.Geometry.Territory.Floor.Elevator import Elevator
-from Classes.Geometry.Territory.Floor.Floor import Floor
-from Classes.Geometry.Territory.Floor.Stair import Stair
+from Classes.Geometry.Territory.Building.Building import Building
+from Classes.Geometry.Territory.Building.Elevator import Elevator
+from Classes.Geometry.Territory.Building.Floor.Floor import Floor
+from Classes.Geometry.Territory.Building.Stair import Stair
 from Classes.Geometry.Territory.Territory import Territory
 from GUI.Painter.RotationHandle import RotationHandle
 from GUI.Painter.ElevatorRect import ElevatorRect
