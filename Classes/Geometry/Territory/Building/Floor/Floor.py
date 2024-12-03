@@ -31,7 +31,7 @@ class Floor(GeometricFigure):
             k: {
                 'area_range': v['area_range'],
                 'percent': v['percent'],
-                'number': 0  # Начальное количество = 0
+                'number': 0
             } for k, v in self.apartment_table.items()
         }
 
@@ -42,19 +42,23 @@ class Floor(GeometricFigure):
             section_polygon = Polygon(points)
             proportioned_section_area = section_polygon.area / total_section_area if total_section_area > 0 else 0  # Пропорции площади секции
 
-            for apt_type, info in apartment_section_table.items():
-                assigned_number = int(proportioned_section_area * self.apartment_table[apt_type]['number'])
-                apartment_section_table[apt_type]['number'] += assigned_number
-                total_assigned_numbers[apt_type] += assigned_number
 
 
             if i == len(self.sections_points) - 1:
-                for apt_type, info in apartment_section_table.items():
-                    apartment_section_table[apt_type]['number'] = self.apartment_table[apt_type]['number'] - \
-                                                                   total_assigned_numbers[apt_type]
+                for apt_type in apartment_section_table.keys():
+                    apartment_section_table[apt_type].pop('number')
+                    apartment_section_table[apt_type]['number'] = (self.apartment_table[apt_type]['number'] -
+                                                                  total_assigned_numbers[apt_type])
+            else:
+                for apt_type in apartment_section_table.keys():
+                    assigned_number = int(proportioned_section_area * self.apartment_table[apt_type]['number'])
+                    apartment_section_table[apt_type].pop('number')
+                    apartment_section_table[apt_type]['number'] = assigned_number
+                    total_assigned_numbers[apt_type] += assigned_number
+            print(f"Секция {i}: {apartment_section_table}")
 
             # Создаем секцию
-            section = Section(points=points)
+            section = Section(points=points, apartment_table=apartment_section_table)
             section.check_and_create_cell_grid(cell_size=1)
             if len(self.elevators) > 0:
                 for elevator in self.elevators:
@@ -67,6 +71,5 @@ class Floor(GeometricFigure):
                         section.stairs.append(stair)
                 section.set_stairs()
 
-            section.generate_section_planning(apartment_section_table, max_iterations=20, cell_size=1)
+            section.generate_section_planning(max_iterations=20)
             self.sections.append(section)
-

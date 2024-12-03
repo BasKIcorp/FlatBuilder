@@ -49,16 +49,21 @@ class Territory(GeometricFigure):
                 } for k, v in self.apartment_table.items()
             }
 
-            # Обновляем общее распределенное количество квартир для каждого типа
-            for apt_type in apartment_building_table.keys():
-                total_assigned_numbers[apt_type] += apartment_building_table[apt_type]['number']
+
 
             # Убедитесь, что в последнем здании все квартиры распределены
             if i == len(self.building_points) - 1:
-                for apt_type, info in apartment_building_table.items():
-                    apartment_building_table[apt_type]['number'] = self.apartment_table[apt_type]['number'] - \
-                                                                   total_assigned_numbers[apt_type]
+                for apt_type in apartment_building_table.keys():
+                    apartment_building_table[apt_type].pop('number')
+                    apartment_building_table[apt_type]['number'] = (self.apartment_table[apt_type]['number'] -
+                                                                   total_assigned_numbers[apt_type])
+            else:
+                # Обновляем общее распределенное количество квартир для каждого типа
+                for apt_type in apartment_building_table.keys():
+                    total_assigned_numbers[apt_type] += apartment_building_table[apt_type]['number']
+                    print(total_assigned_numbers)
 
+            print(f"Здание {i}: {apartment_building_table}")
             # Создаем здания
             building = Building(points=points,
                                 sections=self.sections_coords,
@@ -68,4 +73,6 @@ class Territory(GeometricFigure):
                                 stairs_coords=self.stairs_coords)
             building.generate_floors()
             self.buildings.append(building)
+
+
 

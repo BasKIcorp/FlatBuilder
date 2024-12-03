@@ -4,6 +4,7 @@ from Classes.Geometry.Territory.Building.Elevator import Elevator
 from Classes.Geometry.Territory.Building.Stair import Stair
 from typing import List, Tuple, Dict
 import copy
+from shapely import Polygon
 
 
 class Building(GeometricFigure):
@@ -16,7 +17,7 @@ class Building(GeometricFigure):
         super().__init__(points)
         self.floors = []  # Список этажей в здании
         self.num_floors = num_floors  # Количество этажей
-        self.sections = sections  # Секции этажей
+        self.sections = [section for section in sections if Polygon(points).contains(Polygon(section).exterior)]
         self.apartment_table = apartment_table  # Таблица квартир, переданная в класс
         # Создаем лифты и лестницы
         self.elevators = [Elevator(coords) for coords in elevators_coords] if elevators_coords is not None else []
@@ -36,9 +37,11 @@ class Building(GeometricFigure):
                 # Учитываем деление на количество этажей
             } for k, v in self.apartment_table.items()
         }
+        print(f"Все этажи {common_apartment_floor_table}")
         floor = Floor(points=self.points, sections=self.sections,
                       apartment_table=common_apartment_floor_table,
                       elevators=self.elevators, stairs=self.stairs)
+
         floor.generate_floor_planning()  # Генерируем план этажа
         for _ in range(self.num_floors - 1):
             self.floors.append(floor)
@@ -52,7 +55,7 @@ class Building(GeometricFigure):
                 # Вычисляем количество квартир для последнего этажа
             } for k, v in self.apartment_table.items()
         }
-
+        print(f"Первый этаж {last_apartment_floor_table}")
         # Создаем последний этаж с корректированным количеством квартир
         last_floor = Floor(points=self.points, sections=self.sections,
                            apartment_table=last_apartment_floor_table,

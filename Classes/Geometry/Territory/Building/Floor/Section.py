@@ -5,13 +5,14 @@ from Classes.Geometry.Territory.Building.Stair import Stair
 from shapely.geometry import Polygon, LineString, MultiPolygon
 from shapely.ops import unary_union
 import random
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import time
 
 
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
-             apartments: List['Apartment'] = None):
+                 apartment_table: Dict,
+                 apartments: List['Apartment'] = None):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = []
@@ -19,8 +20,9 @@ class Section(GeometricFigure):
         self.queue_corners_to_allocate = []
         self.elevators_stairs_cells = []
         self.free_cells = []
+        self.apartment_table = apartment_table
 
-    def generate_section_planning(self, apartment_table, max_iterations=50, cell_size=1):
+    def generate_section_planning(self, max_iterations=50, cell_size=1):
         if len(self.elevators) > 0 or len(self.stairs) > 0:
             self.elevators_stairs_cells = [cell for cell in self.cells if cell['assigned_for_elevators_stairs']]
         self.cell_size = cell_size
@@ -29,7 +31,7 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
-        valid_table, message = self.validate_apartment_table(apartment_table)
+        valid_table, message = self.validate_apartment_table()
         if not valid_table:
             print(message)  # Печать причины, если планирование невозможно
         else:
@@ -43,7 +45,7 @@ class Section(GeometricFigure):
             self.queue_corners_to_allocate = []
             # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
-            apartments = self._allocate_apartments(self.cells, apartment_table)
+            apartments = self._allocate_apartments(self.cells)
 
             # **Validation**: Validate apartments for free sides
             if not apartments:
@@ -67,7 +69,7 @@ class Section(GeometricFigure):
             #         continue
 
             # Calculate distribution error
-            total_error = self._calculate_total_error(apartments, apartment_table)
+            total_error = self._calculate_total_error(apartments)
 
             # Update the best plan if current is better
             if total_error < best_score:
@@ -97,7 +99,7 @@ class Section(GeometricFigure):
         for cell in self.cells:
             cell['assigned'] = False
 
-    def _allocate_apartments(self, cells, apartment_table):
+    def _allocate_apartments(self, cells):
         """Allocates cells to apartments according to the specified parameters."""
 
         apartments = []
@@ -105,9 +107,9 @@ class Section(GeometricFigure):
         self.initial_corner_cells = [cell for cell in cells if cell['is_corner']]
 
         # Calculate the number of cells for each apartment type
-        cell_counts, remaining_cell_counts = self._calculate_cell_counts(apartment_table, cells)
+        cell_counts, remaining_cell_counts = self._calculate_cell_counts(cells)
 
-        for apt_type, apt_info in reversed(apartment_table.items()):
+        for apt_type, apt_info in reversed(self.apartment_table.items()):
 
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             allocated_cell_count = remaining_cell_counts[apt_type]
@@ -191,21 +193,21 @@ class Section(GeometricFigure):
                 return False
         return True
 
-    def _calculate_cell_counts(self, apartment_table, cells):
+    def _calculate_cell_counts(self, cells):
         """Calculates the number of cells to allocate for each apartment type."""
         total_area = self.polygon.area
         cell_area = cells[0]['polygon'].area if cells else 0
         cell_counts = {}
-        total_area_min = {apt_type: 0 for apt_type in apartment_table.keys()}
-        total_area_max = {apt_type: 0 for apt_type in apartment_table.keys()}
-        for apt_type, apt_info in apartment_table.items():
+        total_area_min = {apt_type: 0 for apt_type in self.apartment_table.keys()}
+        total_area_max = {apt_type: 0 for apt_type in self.apartment_table.keys()}
+        for apt_type, apt_info in self.apartment_table.items():
             number = apt_info['number']
             area_range = apt_info['area_range']
             min_cells = area_range[0]
             max_cells = area_range[1]
             total_area_min[apt_type] += number * min_cells
             total_area_max[apt_type] += number * max_cells
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in self.apartment_table.items():
             number = apt_info['number']
             percent = apt_info['percent']
             allocated_area_min = sum(total_area_min.values()) * percent / 100
@@ -244,9 +246,11 @@ class Section(GeometricFigure):
         elif len(self.initial_corner_cells) > 0:
             start_cell = random.choice(self.initial_corner_cells)
             self.initial_corner_cells.remove(start_cell)  # Удаляем выбранный элемент из списка
-        else:
+        elif len([cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
             start_cell = random.choice(
                 [cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']])
+        else:
+            return None
         queue = [start_cell]
         while queue and len(apartment_cells) < apt_cell_count:
             current_cell = queue.pop(0)
@@ -292,31 +296,31 @@ class Section(GeometricFigure):
                         cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
                         self.queue_corners_to_allocate.append(cell_for_new_corner)
 
-    def _calculate_total_error(self, apartments, apartment_table):
+    def _calculate_total_error(self, apartments):
         """Calculates the total error in apartment type distribution among allocated area."""
         # Calculate the total allocated area
         total_allocated_area = sum(apt.area for apt in apartments)
 
         # Calculate actual percentages among allocated area
         actual_percentages = {}
-        for apt_type in apartment_table.keys():
+        for apt_type in self.apartment_table.keys():
             total_type_area = sum(apt.area for apt in apartments if apt.type == apt_type)
             actual_percent = (total_type_area / total_allocated_area) * 100 if total_allocated_area > 0 else 0
             actual_percentages[apt_type] = actual_percent
 
         # Calculate total desired percentage
-        total_desired_percent = sum(apt_info['percent'] for apt_info in apartment_table.values())
+        total_desired_percent = sum(apt_info['percent'] for apt_info in self.apartment_table.values())
 
         # Normalize desired percentages to sum up to 100%
         normalized_desired_percentages = {}
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in self.apartment_table.items():
             normalized_percent = (apt_info['percent'] / total_desired_percent) * 100 if total_desired_percent > 0 else 0
             normalized_desired_percentages[apt_type] = normalized_percent
 
         # Calculate total error based on normalized desired percentages
         total_error = sum(
             abs(normalized_desired_percentages[apt_type] - actual_percentages.get(apt_type, 0))
-            for apt_type in apartment_table.keys()
+            for apt_type in self.apartment_table.keys()
         )
         return total_error
 
@@ -384,7 +388,7 @@ class Section(GeometricFigure):
                 return True
         return False
 
-    def validate_apartment_table(self, apartment_table):
+    def validate_apartment_table(self):
         """Проверяет, возможно ли выделить квартиры с заданными 'number' и 'percent'."""
         total_area = self.polygon.area  # Общая площадь этажа
         total_required_area = 0  # Общая требуемая площадь для всех квартир
@@ -392,7 +396,7 @@ class Section(GeometricFigure):
         apartment_min_areas = {}  # Минимальные площадки для расчетов
 
         # Подсчет площади для заданной конфигурации
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in self.apartment_table.items():
             number = apt_info['number']
             area_range = apt_info['area_range']
 
@@ -412,7 +416,7 @@ class Section(GeometricFigure):
         # Проверка по процентам на основе общей площади квартир
         total_area_needed_by_percent = 0  # Общая площадь, требуемая по процентам
 
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in self.apartment_table.items():
             percent = apt_info['percent']
 
             # Суммируем минимально необходимую площадь
@@ -427,7 +431,7 @@ class Section(GeometricFigure):
 
         # Рассчет альтернативных параметров для достижения меньшей ошибки
         alternative_parameters = []
-        for apt_type, apt_info in apartment_table.items():
+        for apt_type, apt_info in self.apartment_table.items():
             percent = apt_info['percent']
             optimal_area = (percent / 100) * total_required_area  # Необходимая площадь по проценту
 
