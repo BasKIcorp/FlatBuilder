@@ -55,12 +55,12 @@ class Apartment(GeometricFigure):
                                                                               room_type=room_type, rooms=rooms)
                             # Выделяем ячейки для комнаты
                             room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
-                    if not self.aspect_ratio_ok(room_cells):
+                    if not self.aspect_ratio_ok(room_cells) and room_type in ['living_room', 'bedroom']:
                         failure = True
                         break
                     room_polygon = unary_union([cell['polygon'] for cell in room_cells])
                     rectangular_room_polygon = room_polygon.envelope
-                    if rectangular_room_polygon.area < max_cells:
+                    if rectangular_room_polygon.area <= max_cells:
                         for cell in self.cells:
                             if not cell['assigned'] and rectangular_room_polygon.contains(cell['polygon']):
                                 room_cells.append(cell)
@@ -73,6 +73,14 @@ class Apartment(GeometricFigure):
                         else:
                             continue
                     else:
+                        for i in range(3):
+                            new_room_polygon = unary_union([cell['polygon'] for cell in room_cells[:(-1-i)]])
+                            if new_room_polygon.area == room_polygon.envelope.area:
+                                room_polygon = new_room_polygon.copy()
+                                for cell in room_cells[(-1-i):]:
+                                    cell['assigned'] = False
+                                room_cells = room_cells[(-1-i):]
+                                break
                         if isinstance(room_polygon, Polygon):
                             points = list(room_polygon.exterior.coords)
                         elif isinstance(room_polygon, MultiPolygon):
@@ -84,6 +92,8 @@ class Apartment(GeometricFigure):
                     room.cells = room_cells
                     rooms.append(room)
 
+                if failure:
+                    break
             if failure:
                 continue
             total_error = self._calc_total_error(rooms[:-1])
@@ -183,7 +193,7 @@ class Apartment(GeometricFigure):
             return min_cells, max_cells
         else:
             if room_type == 'kitchen':
-                min_cells = int(0.6 * (self.polygon.area - allocated_area) / 3)
+                min_cells = int(0.7 * (self.polygon.area - allocated_area) / 3)
                 max_cells = int((self.polygon.area - allocated_area) / 3)
                 return min_cells, max_cells
             elif room_type == 'bathroom':

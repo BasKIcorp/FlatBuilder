@@ -124,6 +124,7 @@ class Section(GeometricFigure):
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
+                apartment_cells = self.fill_section_perimeter(self.cells, apartment_cells, max_cells)
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
 
                 # Create the apartment polygon
@@ -146,6 +147,14 @@ class Section(GeometricFigure):
                         continue
                 # Проверяем тип полигона
                 else:
+                    for i in range(3):
+                        new_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells[:(-1 - i)]])
+                        if new_apartment_polygon.area == apartment_polygon.envelope.area:
+                            apartment_polygon = new_apartment_polygon.copy()
+                            for cell in apartment_cells[(-1 - i):]:
+                                cell['assigned'] = False
+                            apartment_cells = apartment_cells[(-1 - i):]
+                            break
                     if isinstance(apartment_polygon, Polygon):  # Если это Polygon
                         points = list(apartment_polygon.boundary.coords)
                     elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
@@ -166,6 +175,7 @@ class Section(GeometricFigure):
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
                 number -= 1
+
 
         return apartments
 
@@ -315,6 +325,8 @@ class Section(GeometricFigure):
                     for cell_for_new_corner in perimeter_neighbors_for_new_corner:
                         cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
                         self.queue_corners_to_allocate.append(cell_for_new_corner)
+
+
 
     # def _calculate_total_error(self, apartments):
     #     """Calculates the total error in apartment type distribution among allocated area."""
@@ -468,5 +480,55 @@ class Section(GeometricFigure):
                 })
 
         return True, alternative_parameters  # Возвращаем True и альтернативные параметры
+
+    def fill_section_perimeter(self, cells, apartment_cells, max_area):
+        """
+        Расширяет apartment_cells, заполняя периметр секции, если осталось меньше 5 свободных клеток
+        и добавляет клетки в apartment_cells, если площадь их контура меньше max_area.
+
+        Args:
+            cells (list): Список всех клеток секции.
+            apartment_cells (list): Список клеток, уже принадлежащих квартире.
+            max_area (float): Максимально допустимая площадь контура.
+        """
+        # Находим периметр секции
+        initial_apartment_cells = apartment_cells.copy()
+        section_sides = [LineString([self.polygon.exterior.coords[i], self.polygon.exterior.coords[i + 1]])
+                         for i in range(len(self.polygon.exterior.coords) - 1)]
+
+        # Список клеток, которые еще не заняты
+        unassigned_cells = [cell for cell in cells if not cell['assigned']]
+
+        # Найдем стороны секции, пересекающиеся с apartment_cells
+        intersecting_sides = []
+        apartment_cells_union = unary_union([cell['polygon'] for cell in apartment_cells])
+
+        for side in section_sides:
+            if apartment_cells_union.intersects(side):
+                intersecting_sides.append(side)
+
+        # Расширяем apartment_cells вдоль периметра, если осталось менее 5 свободных клеток
+        for side in intersecting_sides:
+            adjacent_unassigned = [
+                cell for cell in unassigned_cells
+                if cell['polygon'].intersects(side)
+            ]
+            if len(adjacent_unassigned) < 3:
+                for cell in adjacent_unassigned:
+                    cell['assigned'] = True
+                    apartment_cells.append(cell)
+
+        # Проверяем площадь envelope и добавляем клетки из envelope
+        apartment_cells_union = unary_union([cell['polygon'] for cell in apartment_cells])
+        apartment_envelope = apartment_cells_union.envelope
+
+        if apartment_envelope.area < max_area:
+            for cell in unassigned_cells:
+                if apartment_envelope.contains(cell['polygon']):
+                    cell['assigned'] = True
+                    apartment_cells.append(cell)
+        else:
+            return initial_apartment_cells
+        return apartment_cells
 
 
