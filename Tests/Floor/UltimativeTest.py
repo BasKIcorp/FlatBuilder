@@ -1,9 +1,6 @@
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from Classes.Geometry.Territory.Territory import Territory
-from Classes.Geometry.Territory.Building.Building import Building
-from Classes.Geometry.Territory.Building.Floor.Floor import Floor
-from Classes.Geometry.Territory.Building.Floor.Section import Section
 from shapely.geometry import Polygon
 
 # Исходные данные полигона территории и зданий
@@ -30,7 +27,7 @@ apartment_table = {
 }
 room_colors = {
     'kitchen': 'red',
-    'wet_area': 'green',
+    'bathroom': 'green',
     'hall': 'blue',
     'living room': 'orange',
     'bedroom': 'purple'

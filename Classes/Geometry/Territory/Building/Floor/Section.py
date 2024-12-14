@@ -12,7 +12,8 @@ import time
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
-                 apartments: List['Apartment'] = None):
+                 apartments: List['Apartment'] = None,
+                 building_polygon: Polygon = None):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.elevators = []
@@ -21,6 +22,7 @@ class Section(GeometricFigure):
         self.elevators_stairs_cells = []
         self.free_cells = []
         self.apartment_table = apartment_table
+        self.building_polygon = building_polygon
 
     def generate_section_planning(self, max_iterations=50, cell_size=1):
         if len(self.elevators) > 0 or len(self.stairs) > 0:
@@ -41,7 +43,8 @@ class Section(GeometricFigure):
 
         for iteration in range(max_iterations):
             # Reset the cell assignments between iterations
-
+            self.cells = None
+            self.check_and_create_cell_grid(cell_size=1.0)
             self.queue_corners_to_allocate = []
             # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
@@ -58,6 +61,7 @@ class Section(GeometricFigure):
                 # Allocation is invalid, skip to next iteration
                 # print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
                 for apart in apartments:
+                    apart.check_and_create_cell_grid(cell_size=1)
                     apart._reset_cell_assignments()
                     self._process_cells()
                 continue
@@ -68,18 +72,17 @@ class Section(GeometricFigure):
             #             apart._reset_cell_assignments()
             #         continue
 
-            # Calculate distribution error
-            total_error = self._calculate_total_error(apartments)
-
-            # Update the best plan if current is better
+            # # Calculate distribution error
+            # total_error = self._calculate_total_error(apartments)
+            #
+            # # Update the best plan if current is better
+            total_error = 0
             if total_error < best_score:
                 best_score = total_error
                 best_plan = apartments
                 self.free_cells = [cell for cell in self.cells if not cell["assigned"]]
                 print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
-            for apart in apartments:
-                apart._reset_cell_assignments()
-                self._process_cells()
+
 
             # Early exit if perfect plan is found
             if best_score == 0:
@@ -87,6 +90,8 @@ class Section(GeometricFigure):
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         for apt in self.apartments:
+            apt.check_and_create_cell_grid(cell_size=1.0)
+            apt._process_cells()
             apt.generate_apartment_planning()
 
         total_time = time.time() - start_time
@@ -123,15 +128,32 @@ class Section(GeometricFigure):
 
                 # Create the apartment polygon
                 apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
-
-                # Проверяем тип полигона
-                if isinstance(apartment_polygon, Polygon):  # Если это Polygon
-                    points = list(apartment_polygon.exterior.coords)
-                elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
+                rectangular_apartment_polygon = apartment_polygon.envelope
+                if rectangular_apartment_polygon.area < max_cells:
+                    for cell in remaining_cells:
+                        if not cell['assigned'] and rectangular_apartment_polygon.contains(cell['polygon']):
+                            apartment_cells.append(cell)
+                            cell['assigned'] = True
                     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                    continue
+                    rectangular_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
+                    if isinstance(rectangular_apartment_polygon, Polygon):  # Если это Polygon'
+                        points = list(rectangular_apartment_polygon.exterior.coords)
+                        print(points)
+
+                    elif isinstance(rectangular_apartment_polygon, MultiPolygon):  # Если это MultiPolygon
+                        for cell in apartment_cells:
+                            cell['assigned'] = False
+                        remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+                        continue
+                # Проверяем тип полигона
+                else:
+                    if isinstance(apartment_polygon, Polygon):  # Если это Polygon
+                        points = list(apartment_polygon.boundary.coords)
+                    elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
+                        for cell in apartment_cells:
+                            cell['assigned'] = False
+                        remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+                        continue
 
                 # if self._check_intersection_with_structures(points):
                 #     for cell in apartment_cells:
@@ -139,14 +161,8 @@ class Section(GeometricFigure):
                 #     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                 #     continue
                 self._update_cell_properties(apartment_cells)
-                # Создаем объект Apartment
-                rooms = []  # Плейсхолдер для комнат
-                wet_areas = []  # Плейсхолдер для мокрых зон
-                balconies = []  # Плейсхолдер для балконов
-
-                apartment = Apartment(points=points, apt_type=apt_type, rooms=rooms, wet_areas=wet_areas,
-                                      balconies=balconies)
-                apartment.cells = apartment_cells
+                
+                apartment = Apartment(points=points, apt_type=apt_type)
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
@@ -164,6 +180,7 @@ class Section(GeometricFigure):
         A free side is a side not adjacent to the external perimeter or any other apartment.
         Returns True if all apartments have at least one free side, False otherwise.
         """
+        all_valid = True
         for i, apt in enumerate(apartments):
             apartment_polygon = apt.polygon
             has_free_side = False
@@ -172,26 +189,30 @@ class Section(GeometricFigure):
             # Create LineStrings for each side
             sides = [LineString([coords[j], coords[j + 1]]) for j in
                      range(len(coords) - 1)]  # last point is same as first
-
+            free_sides = []
+            building_perimeter_sides = []
             for side in sides:
-                # Check if side intersects with external perimeter
-                if self.polygon.exterior.intersects(side):
-                    continue
+                side_touches_section_perimeter = self.polygon.exterior.intersects(side)
+                side_touches_building_perimeter = self.building_polygon.exterior.intersects(side)
+                side_touches_other_apartment = False
                 # Check if side intersects with any other apartment
                 for k, other_apt in enumerate(apartments):
                     if k == i:
                         continue
                     if other_apt.polygon.exterior.intersects(side):
+                        side_touches_other_apartment = True
                         break  # Side touches another apartment
-                else:
-                    # Side does not touch external perimeter or any other apartment
+                if not side_touches_other_apartment and not side_touches_section_perimeter:
                     has_free_side = True
-                    break
-
+                    free_sides.append(side)
+                if side_touches_building_perimeter:
+                    building_perimeter_sides.append(side)
             if not has_free_side:
-                # Apartment does not have any free sides
-                return False
-        return True
+                all_valid = False
+
+            apt.free_sides = free_sides
+            apt.building_perimeter_sides = building_perimeter_sides
+        return all_valid
 
     def _calculate_cell_counts(self, cells):
         """Calculates the number of cells to allocate for each apartment type."""
@@ -235,7 +256,7 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(min_cells, max_cells)
+        apt_cell_count = random.randint(min_cells, (max_cells-min_cells) * 0.8 + min_cells)
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
@@ -296,33 +317,33 @@ class Section(GeometricFigure):
                         cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
                         self.queue_corners_to_allocate.append(cell_for_new_corner)
 
-    def _calculate_total_error(self, apartments):
-        """Calculates the total error in apartment type distribution among allocated area."""
-        # Calculate the total allocated area
-        total_allocated_area = sum(apt.area for apt in apartments)
-
-        # Calculate actual percentages among allocated area
-        actual_percentages = {}
-        for apt_type in self.apartment_table.keys():
-            total_type_area = sum(apt.area for apt in apartments if apt.type == apt_type)
-            actual_percent = (total_type_area / total_allocated_area) * 100 if total_allocated_area > 0 else 0
-            actual_percentages[apt_type] = actual_percent
-
-        # Calculate total desired percentage
-        total_desired_percent = sum(apt_info['percent'] for apt_info in self.apartment_table.values())
-
-        # Normalize desired percentages to sum up to 100%
-        normalized_desired_percentages = {}
-        for apt_type, apt_info in self.apartment_table.items():
-            normalized_percent = (apt_info['percent'] / total_desired_percent) * 100 if total_desired_percent > 0 else 0
-            normalized_desired_percentages[apt_type] = normalized_percent
-
-        # Calculate total error based on normalized desired percentages
-        total_error = sum(
-            abs(normalized_desired_percentages[apt_type] - actual_percentages.get(apt_type, 0))
-            for apt_type in self.apartment_table.keys()
-        )
-        return total_error
+    # def _calculate_total_error(self, apartments):
+    #     """Calculates the total error in apartment type distribution among allocated area."""
+    #     # Calculate the total allocated area
+    #     total_allocated_area = sum(apt.area for apt in apartments)
+    #
+    #     # Calculate actual percentages among allocated area
+    #     actual_percentages = {}
+    #     for apt_type in self.apartment_table.keys():
+    #         total_type_area = sum(apt.area for apt in apartments if apt.type == apt_type)
+    #         actual_percent = (total_type_area / total_allocated_area) * 100 if total_allocated_area > 0 else 0
+    #         actual_percentages[apt_type] = actual_percent
+    #
+    #     # Calculate total desired percentage
+    #     total_desired_percent = sum(apt_info['percent'] for apt_info in self.apartment_table.values())
+    #
+    #     # Normalize desired percentages to sum up to 100%
+    #     normalized_desired_percentages = {}
+    #     for apt_type, apt_info in self.apartment_table.items():
+    #         normalized_percent = (apt_info['percent'] / total_desired_percent) * 100 if total_desired_percent > 0 else 0
+    #         normalized_desired_percentages[apt_type] = normalized_percent
+    #
+    #     # Calculate total error based on normalized desired percentages
+    #     total_error = sum(
+    #         abs(normalized_desired_percentages[apt_type] - actual_percentages.get(apt_type, 0))
+    #         for apt_type in self.apartment_table.keys()
+    #     )
+    #     return total_error
 
 
     def set_elevators(self):

@@ -130,6 +130,7 @@ class GeometricFigure:
                 cell['is_corner'] = False
 
 
+
             # Find neighbors, including diagonal neighbors
             neighbors = []
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (-1, 1), (1, -1)]:
@@ -138,5 +139,14 @@ class GeometricFigure:
                     neighbor = self.cell_dict[(ni, nj)]
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
+
+        # corner_cells = [cell for cell in self.cells if cell['is_corner']]
+        # corners_to_delete = []
+        # for neighbor in corner_cells:
+        #     if neighbor['is_corner']:
+        #         corners_to_delete.append(neighbor)
+        # if len(corners_to_delete) > 0:
+        #     for corner in corners_to_delete:
+        #         corner['is_corner'] = False
 
 
