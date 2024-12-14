@@ -102,7 +102,7 @@ class GeometricFigure:
         """Determines neighbors of cells and marks cells on the perimeter."""
         # Prepare the polygon for faster operations
         polygon_prepared = prep(self.polygon)
-        exterior = self.polygon.exterior
+        exterior = self.polygon.simplify(tolerance=1, preserve_topology=True).exterior
 
         for cell in self.cells:
             i, j = cell['id']
@@ -130,7 +130,6 @@ class GeometricFigure:
                 cell['is_corner'] = False
 
 
-
             # Find neighbors, including diagonal neighbors
             neighbors = []
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (-1, 1), (1, -1)]:
@@ -139,6 +138,8 @@ class GeometricFigure:
                     neighbor = self.cell_dict[(ni, nj)]
                     neighbors.append(neighbor)
             cell['neighbors'] = neighbors
+
+
 
         # corner_cells = [cell for cell in self.cells if cell['is_corner']]
         # corners_to_delete = []

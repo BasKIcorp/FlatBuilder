@@ -136,9 +136,8 @@ class Section(GeometricFigure):
                             cell['assigned'] = True
                     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
                     rectangular_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
-                    if isinstance(rectangular_apartment_polygon, Polygon):  # Если это Polygon'
+                    if isinstance(rectangular_apartment_polygon, Polygon):  # Если это Polygon
                         points = list(rectangular_apartment_polygon.exterior.coords)
-                        print(points)
 
                     elif isinstance(rectangular_apartment_polygon, MultiPolygon):  # Если это MultiPolygon
                         for cell in apartment_cells:

@@ -27,84 +27,82 @@ class Apartment(GeometricFigure):
         self.building_perimeter_sides = []
 
     def generate_apartment_planning(self):
-        self.cells = None
-        self.check_and_create_cell_grid(cell_size=1)
-        self._process_cells()
-        self.rooms = []
-        room_table = self.get_room_types_by_apartment_type(self.type)
-        self.starting_corner_cells = [cell for cell in self.cells if cell['is_corner']]
-        remaining_cells = [cell for cell in self.cells if not cell['assigned']]  # Все доступные ячейки
-        room_number = 0
-
-        # Распределение комнат, учитывая последнее условие
-        for index, (room_type, count) in enumerate(room_table):
-            for _ in range(count):
-                if index == len(room_table) - 1 and _ == count - 1:
-                    room_cells = [cell for cell in self.cells if not cell['assigned']]
-                else:
-                    if self.type == 'studio':
-                        min_cells = 6
-                        max_cells = 10
-                        room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
+        max_iterations = 5
+        best_plan = None
+        best_score = float('inf')
+        failure = False
+        for i in range(max_iterations):
+            rooms = []
+            room_number = 0
+            self.cells = None
+            self.check_and_create_cell_grid(cell_size=1)
+            room_table = self.get_room_types_by_apartment_type(self.type)
+            self.starting_corner_cells = [cell for cell in self.cells if cell['is_corner']]
+            remaining_cells = [cell for cell in self.cells if not cell['assigned']]  # Все доступные ячейки
+            # Распределение комнат, учитывая последнее условие
+            for index, (room_type, count) in enumerate(room_table):
+                for _ in range(count):
+                    if index == len(room_table) - 1 and _ == count - 1:
+                        room_cells = [cell for cell in self.cells if not cell['assigned']]
                     else:
-                        min_cells, max_cells = self._get_rooms_cell_range(room_table=room_table, room_number=room_number,
-                                                                          cell_size=self.cell_size)
-                        # Выделяем ячейки для комнаты
-                        room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
-                room_polygon = unary_union([cell['polygon'] for cell in room_cells])
-                rectangular_room_polygon = room_polygon.envelope
-                if rectangular_room_polygon.area < max_cells:
-                    for cell in self.cells:
-                        if not cell['assigned'] and rectangular_room_polygon.contains(cell['polygon']):
-                            room_cells.append(cell)
-                            cell['assigned'] = True
-                    rectangular_room_polygon = unary_union([cell['polygon'] for cell in room_cells])
-                    if isinstance(rectangular_room_polygon, Polygon):
-                        points = list(rectangular_room_polygon.exterior.coords)
-                    elif isinstance(rectangular_room_polygon, MultiPolygon):
-                        points = list(rectangular_room_polygon.geoms[0].exterior.coords)
+                        if self.type == 'studio':
+                            min_cells = 6
+                            max_cells = 10
+                            room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
+                        else:
+                            min_cells, max_cells = self._get_rooms_cell_range(room_table=room_table, room_number=room_number,
+                                                                              cell_size=self.cell_size,
+                                                                              room_type=room_type, rooms=rooms)
+                            # Выделяем ячейки для комнаты
+                            room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
+                    if not self.aspect_ratio_ok(room_cells):
+                        failure = True
+                        break
+                    room_polygon = unary_union([cell['polygon'] for cell in room_cells])
+                    rectangular_room_polygon = room_polygon.envelope
+                    if rectangular_room_polygon.area < max_cells:
+                        for cell in self.cells:
+                            if not cell['assigned'] and rectangular_room_polygon.contains(cell['polygon']):
+                                room_cells.append(cell)
+                                cell['assigned'] = True
+                        rectangular_room_polygon = unary_union([cell['polygon'] for cell in room_cells])
+                        if isinstance(rectangular_room_polygon, Polygon):
+                            points = list(rectangular_room_polygon.exterior.coords)
+                        elif isinstance(rectangular_room_polygon, MultiPolygon):
+                            points = list(rectangular_room_polygon.geoms[0].exterior.coords)
+                        else:
+                            continue
                     else:
-                        continue
-                else:
-                    if isinstance(room_polygon, Polygon):
-                        points = list(room_polygon.exterior.coords)
-                    elif isinstance(room_polygon, MultiPolygon):
-                        points = list(room_polygon.geoms[0].exterior.coords)
-                    else:
-                        continue
-                # Создаем объект Room с соответствующим типом
-                room = Room(points=points, room_type=room_type)
-                room.cells = room_cells
-                self.rooms.append(room)
+                        if isinstance(room_polygon, Polygon):
+                            points = list(room_polygon.exterior.coords)
+                        elif isinstance(room_polygon, MultiPolygon):
+                            points = list(room_polygon.geoms[0].exterior.coords)
+                        else:
+                            continue
+                    # Создаем объект Room с соответствующим типом
+                    room = Room(points=points, room_type=room_type)
+                    room.cells = room_cells
+                    rooms.append(room)
 
+            if failure:
+                continue
+            total_error = self._calc_total_error(rooms[:-1])
+            if total_error < best_score:
+                best_score = total_error
+                best_plan = rooms
 
-        # Добавить не назначенные клетки к ближайшей комнате
-        # self._assign_remaining_cells_to_rooms(remaining_cells)
+        self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
 
-    # def _assign_remaining_cells_to_rooms(self, remaining_cells):
-    #     """Добавляет не назначенные клетки к ближайшей комнате."""
-    #     for cell in remaining_cells:
-    #         if not cell['assigned']:
-    #             # Найдем ближайшую комнату
-    #             closest_room = None
-    #             closest_distance = float('inf')
-    #
-    #             for room in self.rooms:
-    #                 distance = room.polygon.distance(cell['polygon'])  # Используем расстояние до полигона комнаты
-    #                 if distance < closest_distance:
-    #                     closest_distance = distance
-    #                     closest_room = room
-    #
-    #             if closest_room:
-    #                 closest_room.cells.append(cell)  # Добавляем клетку в ближайшую комнату
-    #                 closest_room.polygon = unary_union(
-    #                     [closest_room.polygon, cell['polygon']])  # Обновляем полигон комнаты
-    #                 # Обновляем points для передачи в room
-    #                 if isinstance(closest_room.polygon, Polygon):
-    #                     closest_room.points = list(closest_room.polygon.exterior.coords)
-    #                 elif isinstance(closest_room.polygon, MultiPolygon):
-    #                     closest_room.points = list(closest_room.polygon.geoms[0].exterior.coords)
-    #                 cell['assigned'] = True  # Помечаем клетку как назначенную
+    def _calc_total_error(self, rooms):
+        def rectangularity_score(poly):
+            extended_area = poly.envelope.area
+            area = poly.area
+            return abs(extended_area - area) / area
+        score = 0
+        for room in rooms:
+            score += rectangularity_score(room.polygon)
+        return score
+
 
     def get_room_types_by_apartment_type(self, apt_type: str):
         """Возвращает таблицу комнат в зависимости от типа квартиры."""
@@ -174,13 +172,25 @@ class Apartment(GeometricFigure):
 
 
 
-    def _get_rooms_cell_range(self, room_table, room_number, cell_size):
+    def _get_rooms_cell_range(self, room_table, room_number, cell_size, room_type, rooms):
         """Определяет минимальное и максимальное количество ячеек для комнаты на основе диапазона площади."""
         cell_area = cell_size ** 2  # Площадь одной ячейки
-        total_rooms = sum(count for room_type, count in room_table) - room_number
-        min_cells = int(0.5 * self.polygon.area / total_rooms)
-        max_cells = int(self.polygon.area / total_rooms)
-        return min_cells, max_cells
+        allocated_area = sum(room.area for room in rooms)
+        print(allocated_area)
+        if room_type in ['bedroom', 'living room']:
+            min_cells = 11
+            max_cells = 20
+            return min_cells, max_cells
+        else:
+            if room_type == 'kitchen':
+                min_cells = int(0.6 * (self.polygon.area - allocated_area) / 3)
+                max_cells = int((self.polygon.area - allocated_area) / 3)
+                return min_cells, max_cells
+            elif room_type == 'bathroom':
+                min_cells = int(0.6 * (self.polygon.area - allocated_area) / 2)
+                max_cells = int((self.polygon.area - allocated_area) / 2)
+                return min_cells, max_cells
+
 
     def _get_next_start_cell(self, room_type):
         corner_cells = []
@@ -208,3 +218,21 @@ class Apartment(GeometricFigure):
             else:
                 return random.choice(corner_cells)
         return random.choice(corner_cells)
+
+    def aspect_ratio_ok(self, cells, max_aspect_ratio=1.5):
+        # Проверка соотношения сторон комнаты
+        polys = [c['polygon'] for c in cells]
+        union_poly = unary_union(polys)
+        bbox = union_poly.envelope
+        coords = list(bbox.exterior.coords)
+        print(coords)
+        side_lengths = []
+        for i in range(4):
+            x1, y1 = coords[i]
+            x2, y2 = coords[(i + 1) % 4]
+            dist = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+            side_lengths.append(dist)
+        side_lengths.sort()
+        shorter, longer = side_lengths[0], side_lengths[2]
+        ratio = longer / (shorter + 1e-9)
+        return ratio <= max_aspect_ratio, ratio
