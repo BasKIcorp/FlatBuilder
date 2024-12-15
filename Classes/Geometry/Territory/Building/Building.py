@@ -34,7 +34,9 @@ class Building(GeometricFigure):
             self.sections = [self.points]
             floor = Floor(points=self.points, sections=self.sections,
                           apartment_table=self.apartment_table,
-                          elevators=self.elevators, stairs=self.stairs)
+                          elevators=self.elevators, stairs=self.stairs,
+                          building_polygon=self.polygon)
+
             floor.generate_floor_planning()  # Генерируем план этажа
             self.floors.append(floor)
         else:

@@ -26,7 +26,6 @@ class Floor(GeometricFigure):
     def generate_floor_planning(self, cell_size=1):
         self.cells = None
         self.check_and_create_cell_grid(cell_size=cell_size)
-
         # Создаем apartment_section_table
         total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}  # Инициализация счетчиков
         apartment_section_table = {
@@ -40,7 +39,8 @@ class Floor(GeometricFigure):
         # Перебираем секции и рассчитываем количество квартир
         total_section_area = sum(Polygon(points).area for points in self.sections_points)  # Общая площадь секций
         if len(self.sections_points) == 1:
-            section = Section(points=self.sections_points[0], apartment_table=self.apartment_table)
+            section = Section(points=self.sections_points[0], apartment_table=self.apartment_table,
+                              building_polygon=self.building_polygon)
             section.check_and_create_cell_grid(cell_size=1)
             if len(self.elevators) > 0:
                 for elevator in self.elevators:

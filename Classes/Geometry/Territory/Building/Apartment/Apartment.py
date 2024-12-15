@@ -1,12 +1,13 @@
+from random import shuffle
 from turtledemo.penrose import start
 
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Apartment.Room import Room
-
+from Classes.Geometry.Territory.Building.Apartment.Window import Window
 from typing import List, Tuple
 import random
 import time
-from shapely.geometry import Polygon, MultiPolygon
+from shapely.geometry import Polygon, MultiPolygon, LineString
 from shapely.ops import unary_union
 import math
 
@@ -25,6 +26,7 @@ class Apartment(GeometricFigure):
         self.total_rooms = sum(count for room_type, count in room_table)
         self.free_sides = []
         self.building_perimeter_sides = []
+        self.windows = []
 
     def generate_apartment_planning(self):
         max_iterations = 5
@@ -92,6 +94,7 @@ class Apartment(GeometricFigure):
                     room.cells = room_cells
                     rooms.append(room)
 
+
                 if failure:
                     break
             if failure:
@@ -101,7 +104,30 @@ class Apartment(GeometricFigure):
                 best_score = total_error
                 best_plan = rooms
 
+
         self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
+        if self.rooms:
+            self._generate_windows()
+
+    def _generate_windows(self):
+        """Генерирует окна для комнат на внешних сторонах здания."""
+        used_perimeter_sides = set()  # Хранит стороны периметра, на которых уже есть окна
+
+        for room in self.rooms:
+            if room.type not in ['living room', 'bedroom', 'kitchen']:
+                continue  # Только для определенных типов комнат
+            shuffled_sides = self.building_perimeter_sides[:]
+            random.shuffle(shuffled_sides)
+            for side in shuffled_sides:
+                # Проверяем пересечение стороны комнаты с периметром здания
+                if room.polygon.exterior.intersects(side) and side not in used_perimeter_sides:
+                    # Находим пересекающийся участок
+                    intersection = room.polygon.exterior.intersection(side)
+                    if isinstance(intersection, LineString):
+                        # Создаем объект окна и добавляем его в комнату
+                        self.windows.append(Window(intersection))
+                        used_perimeter_sides.add(side)  # Помечаем эту сторону как занятую
+                        break  # Для данной комнаты окно уже назначено, выходим из цикла
 
     def _calc_total_error(self, rooms):
         def rectangularity_score(poly):
@@ -186,7 +212,6 @@ class Apartment(GeometricFigure):
         """Определяет минимальное и максимальное количество ячеек для комнаты на основе диапазона площади."""
         cell_area = cell_size ** 2  # Площадь одной ячейки
         allocated_area = sum(room.area for room in rooms)
-        print(allocated_area)
         if room_type in ['bedroom', 'living room']:
             min_cells = 11
             max_cells = 20
@@ -235,7 +260,6 @@ class Apartment(GeometricFigure):
         union_poly = unary_union(polys)
         bbox = union_poly.envelope
         coords = list(bbox.exterior.coords)
-        print(coords)
         side_lengths = []
         for i in range(4):
             x1, y1 = coords[i]
