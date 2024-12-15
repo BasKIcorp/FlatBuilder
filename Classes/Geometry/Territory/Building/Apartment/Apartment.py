@@ -253,6 +253,8 @@ class Apartment(GeometricFigure):
                 return random.choice(return_cells)
             else:
                 return random.choice(corner_cells)
+        if not corner_cells:
+            return random.choice([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']])
         return random.choice(corner_cells)
 
     def aspect_ratio_ok(self, cells, max_aspect_ratio=1.5):

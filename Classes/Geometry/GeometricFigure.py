@@ -74,7 +74,7 @@ class GeometricFigure:
                 # Include cell if it intersects with the polygon
                 if prepared_polygon.intersects(cell_polygon):
                     if polygon_to_check is not None:
-                        if not polygon_to_check.intersects(cell_polygon):
+                        if not polygon_to_check.contains(cell_polygon):
                             continue
                     cell = {
                         'polygon': cell_polygon,
