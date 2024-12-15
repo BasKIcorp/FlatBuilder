@@ -90,7 +90,8 @@ class Section(GeometricFigure):
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         for apt in self.apartments:
-            apt.check_and_create_cell_grid(cell_size=1.0)
+            apt.section_polygon = self.polygon
+            apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
             apt._process_cells()
             apt.generate_apartment_planning()
 

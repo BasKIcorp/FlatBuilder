@@ -41,11 +41,12 @@ class GeometricFigure:
     def set_cells(self, cells):
         self.cells = cells
 
-    def check_and_create_cell_grid(self, cell_size: float):
+    def check_and_create_cell_grid(self, cell_size: float, polygon_to_check: Polygon = None):
         """Creates a grid of cells covering the polygon and stores it in the object.
 
         Args:
             cell_size (float): The size of each cell in meters.
+            polygon_to_check: the outer polygon, if needed
         """
         if self.cells is None:
             minx, miny, maxx, maxy = self.polygon.bounds
@@ -59,37 +60,33 @@ class GeometricFigure:
             x_flat = x_grid.ravel()
             y_flat = y_grid.ravel()
 
-            # Create cell center points
-            x_centers = x_flat + cell_size / 2
-            y_centers = y_flat + cell_size / 2
+            # Use shapely prepared polygon for faster checks
+            prepared_polygon = prep(self.polygon)
 
-            # Use shapely.vectorized.contains to check which cell centers are inside the polygon
-            points_inside = contains(self.polygon, x_centers, y_centers)
-
-            # Filter the grid cells to only include those inside the polygon
             cells = []
             cell_dict = {}
-            indices = np.where(points_inside)[0]
-            for idx in indices:
-                i = int((x_flat[idx] - minx) / cell_size)
-                j = int((y_flat[idx] - miny) / cell_size)
-                x1 = x_flat[idx]
-                y1 = y_flat[idx]
-                x2 = x1 + cell_size
-                y2 = y1 + cell_size
+
+            for x, y in zip(x_flat, y_flat):
+                x1, y1 = x, y
+                x2, y2 = x + cell_size, y + cell_size
                 cell_polygon = box(x1, y1, x2, y2)
 
-                cell = {
-                    'polygon': cell_polygon,
-                    'assigned': False,
-                    'neighbors': [],
-                    'id': (i, j),
-                    'on_perimeter': False,
-                    'is_corner': False,
-                    'assigned_for_elevators_stairs': False
-                }
-                cells.append(cell)
-                cell_dict[(i, j)] = cell
+                # Include cell if it intersects with the polygon
+                if prepared_polygon.intersects(cell_polygon):
+                    if polygon_to_check is not None:
+                        if not polygon_to_check.intersects(cell_polygon):
+                            continue
+                    cell = {
+                        'polygon': cell_polygon,
+                        'assigned': False,
+                        'neighbors': [],
+                        'id': (int((x - minx) / cell_size), int((y - miny) / cell_size)),
+                        'on_perimeter': False,
+                        'is_corner': False,
+                        'assigned_for_elevators_stairs': False
+                    }
+                    cells.append(cell)
+                    cell_dict[cell['id']] = cell
 
             # Store the cells and cell_dict in the object
             self.cells = cells

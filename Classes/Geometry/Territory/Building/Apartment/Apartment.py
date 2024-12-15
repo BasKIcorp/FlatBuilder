@@ -27,6 +27,7 @@ class Apartment(GeometricFigure):
         self.free_sides = []
         self.building_perimeter_sides = []
         self.windows = []
+        self.section_polygon = None
 
     def generate_apartment_planning(self):
         max_iterations = 5
@@ -37,7 +38,7 @@ class Apartment(GeometricFigure):
             rooms = []
             room_number = 0
             self.cells = None
-            self.check_and_create_cell_grid(cell_size=1)
+            self.check_and_create_cell_grid(cell_size=1, polygon_to_check=Polygon(self.points))
             room_table = self.get_room_types_by_apartment_type(self.type)
             self.starting_corner_cells = [cell for cell in self.cells if cell['is_corner']]
             remaining_cells = [cell for cell in self.cells if not cell['assigned']]  # Все доступные ячейки

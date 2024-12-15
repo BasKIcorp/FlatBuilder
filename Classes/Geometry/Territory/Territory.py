@@ -24,7 +24,7 @@ class Territory(GeometricFigure):
 
     def generate_building_plannings(self):
         # Проверяем и создаем сетку ячеек
-        self.check_and_create_cell_grid(cell_size=1)
+        self.check_and_create_cell_grid_for_building(cell_size=1)
         total_area = 0.0  # Общая площадь территории
 
         # Вычисляем общую площадь всех зданий
