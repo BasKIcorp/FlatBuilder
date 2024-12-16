@@ -39,9 +39,15 @@ class MovablePoint(QGraphicsEllipseItem):
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange and self.scene():
+            # Округление до ближайшего значения, кратного snap_threshold
+            x = round(value.x() / self.snap_threshold) * self.snap_threshold
+            y = round(value.y() / self.snap_threshold) * self.snap_threshold
+            new_pos = QPointF(x, y)
+
+            # Обновляем полигон, связанный с точкой
             polygon_item = self.parent_polygon
-            new_pos = self.snap_to_axes(value, polygon_item.polygon())
             polygon_item.updatePolygon()
+
             return new_pos
         return super().itemChange(change, value)
 

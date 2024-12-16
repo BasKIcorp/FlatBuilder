@@ -315,44 +315,23 @@ class Painter(QGraphicsView):
 
         for polygon in self.polygons.keys():
             polygon.delete_edge_lengths()
-        elevators = []
-        stairs = []
-        for stair in self.stairs:
-            stair_object = [(stair.rect.sceneBoundingRect().topLeft().x(), stair.rect.sceneBoundingRect().topLeft().y()),
-                 (stair.rect.sceneBoundingRect().bottomRight().x(), stair.rect.sceneBoundingRect().topLeft().y()),
-                 (stair.rect.sceneBoundingRect().topLeft().x(), stair.rect.sceneBoundingRect().bottomRight().y()),
-                 (stair.rect.sceneBoundingRect().bottomRight().x(), stair.rect.sceneBoundingRect().bottomRight().x())]
-            stairs.append(stair_object)
 
-        for elevator in self.elevators:
-            elevator_object = [(elevator.rect.sceneBoundingRect().topLeft().x(), elevator.rect.sceneBoundingRect().topLeft().y()),
-                 (elevator.rect.sceneBoundingRect().bottomRight().x(), elevator.rect.sceneBoundingRect().topLeft().y()),
-                 (elevator.rect.sceneBoundingRect().topLeft().x(), elevator.rect.sceneBoundingRect().bottomRight().y()),
-                 (elevator.rect.sceneBoundingRect().bottomRight().x(), elevator.rect.sceneBoundingRect().bottomRight().x())]
-            elevators.append(elevator_object)
+        popo = []
+        for points in buildings:
+            for inner_points in points:
+                popo.append(inner_points)
+        multi = MultiPoint(popo)
+        points = list(multi.envelope.exterior.coords)
 
-        if not stairs:
-            stairs = [[]]
-        if not elevators:
-            elevators = [[]]
-
-        territory = Territory(points=[(-100, -100), (100, -100), (100, 100), (-100, 100)], building_points=buildings, sections_coords=sections,
-                              num_floors=num_floors, apartment_table=apartment_table,
-                              elevators_coords=elevators, stairs_coords=stairs)
+        territory = Territory(points=points, building_points=buildings, sections_coords=sections,
+                              num_floors=num_floors, apartment_table=apartment_table)
 
         self.worker = BuildingGenerator(territory)
         self.worker_thread = Thread(target=self.worker.run)
         self.worker.finished.connect(self.onApartmentsGenerated)
         self.worker_thread.start()
 
-        for i in range(1, num_floors + 1):
-            for building in territory.buildings:
-                for floor in building.floors:
-                    self.floors.append(floor)
-
-
-
-    def onApartmentsGenerated(self, floor):
+    def onApartmentsGenerated(self, floors):
         # Цвета для разных типов квартир
         room_colors = {
             'wet_area': 'red',
@@ -370,6 +349,7 @@ class Painter(QGraphicsView):
             '4 room': '#ba7ed9'
         }
         # Добавляем квартиры на сцену
+        floor = floors[0]
         for section in floor.sections:
             for apt in section.apartments:
                 poly = apt.polygon

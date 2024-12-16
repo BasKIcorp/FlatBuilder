@@ -6,8 +6,12 @@ class BuildingGenerator(QObject):
 
     def __init__(self, territory):
         super().__init__()
+        self.floors = []
         self.territory = territory
 
     def run(self):
         self.territory.generate_building_plannings()
-        self.finished.emit(self.territory)
+        for building in self.territory.buildings:
+            for floor in building.floors:
+                self.floors.append(floor)
+        self.finished.emit(self.floors)

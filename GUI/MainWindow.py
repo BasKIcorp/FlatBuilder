@@ -168,10 +168,12 @@ class MainWindow(QMainWindow):
         self.elevator_button = QPushButton("Добавить лифт")
         self.elevator_button.clicked.connect(lambda: self.show_rectangle_dialog("elevator"))
         self.elevator_button.setFixedWidth(200)
+        self.elevator_button.setDisabled(True)
 
         self.stairs_button = QPushButton("Добавить лестницу")
         self.stairs_button.clicked.connect(lambda: self.show_rectangle_dialog("stairs"))
         self.stairs_button.setFixedWidth(200)
+        self.stairs_button.setDisabled(True)
 
         self.add_point_button = QPushButton("Добавить точку")
         self.add_point_button.clicked.connect(self.graphics_view.add_preview_point)
@@ -188,7 +190,6 @@ class MainWindow(QMainWindow):
         modes_layout.addWidget(self.stairs_button)
         modes_layout.addWidget(self.add_point_button)
         modes_layout.addWidget(self.add_building_button)
-
 
         left_layout.addLayout(modes_layout)
 
@@ -235,8 +236,8 @@ class MainWindow(QMainWindow):
         self.checkbox.setVisible(True)
         self.save_button.setVisible(True)
         self.clear_button.setVisible(True)
-        self.elevator_button.setDisabled(True)
-        self.stairs_button.setDisabled(True)
+        self.elevator_button.setDisabled(False)
+        self.stairs_button.setDisabled(False)
         self.combo.setVisible(True)
         self.combo.clear()
         self.error_text.setText("")
@@ -317,8 +318,8 @@ class MainWindow(QMainWindow):
         self.graphics_view.points = []
         self.clear_button.setVisible(False)
         self.save_button.setVisible(False)
-        self.elevator_button.setDisabled(False)
-        self.stairs_button.setDisabled(False)
+        self.elevator_button.setDisabled(True)
+        self.stairs_button.setDisabled(True)
         self.generate_button.setText("Сгенерировать")
         self.combo.setVisible(False)
         self.graphics_view.add_point(-10, -10)

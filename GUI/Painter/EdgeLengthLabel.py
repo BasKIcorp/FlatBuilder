@@ -20,8 +20,8 @@ class EdgeLengthLabel(QGraphicsTextItem):
                 self.setVisible(False)
         else:
             self.setVisible(True)
-            self.setPlainText(f"{length:.2f}")
-            midpoint = QPointF((start.x() + end.x()) / 2 - 7, (start.y() + end.y()) / 2 - 7)
+            self.setPlainText(f"{length:.2f} м")
+            midpoint = QPointF((start.x() + end.x()) / 2 - 3, (start.y() + end.y()) / 2 - 3)
             self.setPos(midpoint)
 
     @staticmethod
