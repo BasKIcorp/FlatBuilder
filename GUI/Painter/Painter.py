@@ -113,6 +113,7 @@ class Painter(QGraphicsView):
         self.sections = []
         self.rooms = []
         self.internal_edges = []
+        self.floors = []
         self.internal_edge = None
         self.floor_figures = []
 
@@ -297,7 +298,6 @@ class Painter(QGraphicsView):
             pass
 
     def fillApartments(self, apartment_table, num_floors):
-        self.floors = []
         self.all_points.append(self.points)
         self.polygons.update({self.polygon: self.points})
         territory_points = []
@@ -333,6 +333,7 @@ class Painter(QGraphicsView):
 
     def onApartmentsGenerated(self, floors):
         # Цвета для разных типов квартир
+        self.floors = floors
         room_colors = {
             'wet_area': 'red',
             'living_room': 'orange',
