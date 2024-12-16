@@ -16,8 +16,6 @@ sections_polygons = [
 
 # Параметры
 num_floors = 6
-elevators_coords = [[(15, 15), (18, 15), (18, 17), (15, 17)]]
-stairs_coords = [[(90, 10), (88, 10), (88, 12), (90, 12)]]
 apartment_table = {
     'studio': {'area_range': (30, 45), 'percent': 20, 'number': 24},
     '1 room': {'area_range': (40, 60), 'percent': 20, 'number': 36},
@@ -38,9 +36,7 @@ territory = Territory(territory_polygon,
                       buildings_polygons,
                       sections_polygons,
                       num_floors,
-                      apartment_table,
-                      elevators_coords,
-                      stairs_coords)
+                      apartment_table)
 territory.generate_building_plannings()
 
 # Создание графиков
@@ -64,13 +60,7 @@ for building in territory.buildings:
             x, y = section.polygon.exterior.xy  # Укажите правильный способ получения секций
             ax.plot(x, y, color='black', linewidth=2.5)  # Контуры секций на здании
 
-    # Отображение лифтов и лестниц из зданий
-    for elevator in building.elevators:
-        x, y = elevator.polygon.exterior.xy
-        ax.fill(x, y, color='yellow', edgecolor='black', alpha=0.5)  # Лифты
-    for stair in building.stairs:
-        x, y = stair.polygon.exterior.xy
-        ax.fill(x, y, color='pink', edgecolor='black', alpha=0.5)  # Лестницы
+
 
 ax.set_title('Территория со зданиями')
 ax.set_xlim(-10, 110)
@@ -85,14 +75,6 @@ ax.plot(x, y, color='black', linewidth=5)  # Этаж
 for section in first_floor.sections:
     x, y = section.polygon.exterior.xy
     ax.plot(x, y, color='black', linewidth=3)  # Секции на этаже
-    if section.elevators:
-        for elevator in section.elevators:
-            x, y = elevator.polygon.exterior.xy
-            ax.fill(x, y, color='yellow', edgecolor='black', alpha=0.5)  # Лифты
-    if section.stairs:
-        for stair in section.stairs:
-            x, y = stair.polygon.exterior.xy
-            ax.fill(x, y, color='pink', edgecolor='black', alpha=0.5)  # Лестницы
     for apartment in section.apartments:
         x, y = apartment.polygon.exterior.xy
         ax.plot(x, y, color='blue', linewidth=1.5)  # Квартиры
@@ -113,14 +95,6 @@ ax.plot(x, y, color='black', linewidth=5)  # Этаж
 for section in second_to_last_floor.sections:
     x, y = section.polygon.exterior.xy
     ax.plot(x, y, color='black', linewidth=3)  # Секции на этаже
-    if section.elevators:
-        for elevator in section.elevators:
-            x, y = elevator.polygon.exterior.xy
-            ax.fill(x, y, color='yellow', edgecolor='black', alpha=0.5)  # Лифты
-    if section.stairs:
-        for stair in section.stairs:
-            x, y = stair.polygon.exterior.xy
-            ax.fill(x, y, color='pink', edgecolor='black', alpha=0.5)  # Лестницы
     for apartment in section.apartments:
         x, y = apartment.polygon.exterior.xy
         ax.plot(x, y, color='blue', linewidth=1.5)  # Квартиры
@@ -141,14 +115,6 @@ ax.plot(x, y, color='black', linewidth=5)  # Этаж
 for section in first_floor_bldg_2.sections:
     x, y = section.polygon.exterior.xy
     ax.plot(x, y, color='black', linewidth=3)  # Секции на этаже
-    if section.elevators:
-        for elevator in section.elevators:
-            x, y = elevator.polygon.exterior.xy
-            ax.fill(x, y, color='yellow', edgecolor='black', alpha=0.5)  # Лифты
-    if section.stairs:
-        for stair in section.stairs:
-            x, y = stair.polygon.exterior.xy
-            ax.fill(x, y, color='pink', edgecolor='black', alpha=0.5)  # Лестницы
     for apartment in section.apartments:
         x, y = apartment.polygon.exterior.xy
         ax.plot(x, y, color='blue', linewidth=1.5)  # Квартиры
@@ -169,14 +135,6 @@ ax.plot(x, y, color='black', linewidth=5)  # Этаж
 for section in second_to_last_floor_bldg_2.sections:
     x, y = section.polygon.exterior.xy
     ax.plot(x, y, color='black', linewidth=3)  # Секции на этаже
-    if section.elevators:
-        for elevator in section.elevators:
-            x, y = elevator.polygon.exterior.xy
-            ax.fill(x, y, color='yellow', edgecolor='black', alpha=0.5)  # Лифты
-    if section.stairs:
-        for stair in section.stairs:
-            x, y = stair.polygon.exterior.xy
-            ax.fill(x, y, color='pink', edgecolor='black', alpha=0.5)  # Лестницы
     for apartment in section.apartments:
         x, y = apartment.polygon.exterior.xy
         ax.plot(x, y, color='blue', linewidth=1.5)  # Квартиры

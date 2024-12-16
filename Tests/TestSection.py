@@ -79,7 +79,7 @@ def add_legend(ax, room_colors):
     ax.legend(handles=legend_elements, loc='upper right')
 
 # Определим секцию с несколькими квартирами
-section_polygon = [(0, 0), (30, 0), (25, 20), (5, 20)]
+section_polygon = [(0, 0), (30, 0), (30, 20), (0, 20)]
 
 
 # Генерация нескольких квартир

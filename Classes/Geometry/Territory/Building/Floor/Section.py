@@ -16,17 +16,12 @@ class Section(GeometricFigure):
                  building_polygon: Polygon = None):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
-        self.elevators = []
-        self.stairs = []
         self.queue_corners_to_allocate = []
-        self.elevators_stairs_cells = []
         self.free_cells = []
         self.apartment_table = apartment_table
         self.building_polygon = building_polygon
 
     def generate_section_planning(self, max_iterations=50, cell_size=1):
-        if len(self.elevators) > 0 or len(self.stairs) > 0:
-            self.elevators_stairs_cells = [cell for cell in self.cells if cell['assigned_for_elevators_stairs']]
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -66,15 +61,6 @@ class Section(GeometricFigure):
                     self._process_cells()
                 continue
 
-            # if len(self.stairs) > 0 or len(self.elevators) > 0:
-            #     if not self.find_path_to_lifts_or_stairs(apartments):
-            #         for apart in apartments:
-            #             apart._reset_cell_assignments()
-            #         continue
-
-            # # Calculate distribution error
-            # total_error = self._calculate_total_error(apartments)
-            #
             # # Update the best plan if current is better
             total_error = 0
             if total_error < best_score:
@@ -358,68 +344,9 @@ class Section(GeometricFigure):
     #     return total_error
 
 
-    def set_elevators(self):
-        for elevator in self.elevators:
-            for cell in self.cells:
-                if elevator.polygon.contains(cell['polygon'].exterior):  # Проверяем, полностью ли клетка внутри лифта
-                    cell['assigned'] = True  # Помечаем клетку как занятую
-                    cell['assigned_for_elevators_stairs'] = True
 
-    def set_stairs(self):
-        for stair in self.stairs:
-            for cell in self.cells:
-                if stair.polygon.contains(cell['polygon'].exterior):  # Проверяем, полностью ли клетка внутри лифта
-                    cell['assigned'] = True  # Помечаем клетку как занятую
-                    cell['assigned_for_elevators_stairs'] = True
 
-    # def find_path_to_lifts_or_stairs(self, apartments):
-    #     """Находит путь от квартир до лифтов или лестниц на этаже."""
-    #
-    #     # Создаем очередь для BFS
-    #
-    #     # Собираем клетки с квартирами и добавляем их в очередь
-    #     for apartment in apartments:
-    #         queue = deque()
-    #         visited = set()  # Чтобы отслеживать посетенные клетки
-    #         for cell in apartment.cells:
-    #             for neighbor in cell["neighbors"]:
-    #                 if not neighbor['assigned']:  # Если клетка свободна
-    #                     queue.append(neighbor)
-    #                     visited.add(neighbor['id'])  # Помечаем как посещенную
-    #         # BFS для поиска пути
-    #         while queue:
-    #             current_cell = queue.popleft()
-    #
-    #             # Проверяем, находится ли текущая клетка на лифте или лестнице
-    #             if len(self.elevators) > 0:
-    #                 for elevator in self.elevators:
-    #                     if current_cell["polygon"].exterior.intersects(elevator.polygon.exterior):
-    #                         break  # Путь найден
-    #
-    #             if len(self.stairs) > 0:
-    #                 for stair in self.stairs:
-    #                     if current_cell["polygon"].exterior.intersects(stair.polygon.exterior):
-    #                         break  # Путь найден
-    #
-    #             # Проверяем соседние клетки
-    #             for neighbor in current_cell['neighbors']:
-    #                 if not neighbor['assigned'] and neighbor['id'] not in visited:
-    #                     visited.add(neighbor['id'])  # Помечаем соседнюю клетку как посещенную
-    #                     queue.append(neighbor)
-    #         else:
-    #             # Путь не найден
-    #             print('No Way')
-    #             return False
-    #     print('Find a Way')
-    #     return True
 
-    def _check_intersection_with_structures(self, points):
-        """Проверяет, пересекаются ли выделенные клетки с лифтами или лестницами."""
-        polygon_apt = Polygon(points)
-        for cell in self.elevators_stairs_cells:
-            if cell["polygon"].exterior.intersects(polygon_apt):
-                return True
-        return False
 
     def validate_apartment_table(self):
         """Проверяет, возможно ли выделить квартиры с заданными 'number' и 'percent'."""

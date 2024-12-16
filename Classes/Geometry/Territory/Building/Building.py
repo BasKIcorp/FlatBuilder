@@ -12,9 +12,7 @@ class Building(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  sections: List[List[Tuple[float, float]]],
                  num_floors: int,
-                 apartment_table: Dict,
-                 elevators_coords: List[List[Tuple[float, float]]] = None,
-                 stairs_coords: List[List[Tuple[float, float]]] = None):
+                 apartment_table: Dict):
         super().__init__(points)
         self.floors = []  # Список этажей в здании
         self.num_floors = num_floors  # Количество этажей
@@ -22,21 +20,16 @@ class Building(GeometricFigure):
                                                                                      Polygon(points).equals(Polygon(section)))]
         self.apartment_table = apartment_table  # Таблица квартир, переданная в класс
         # Создаем лифты и лестницы
-        self.elevators = [Elevator(coords) for coords in elevators_coords] if elevators_coords is not None else []
-        self.stairs = [Stair(coords) for coords in stairs_coords] if stairs_coords is not None else []
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
         total_assigned_numbers = {apt_type: 0 for apt_type in
                                   self.apartment_table.keys()}  # Инициализация счетчиков для квартир
-
         if self.num_floors == 1:
             self.sections = [self.points]
             floor = Floor(points=self.points, sections=self.sections,
                           apartment_table=self.apartment_table,
-                          elevators=self.elevators, stairs=self.stairs,
-                          building_polygon=self.polygon)
-
+                          building_polygon=Polygon(self.points))
             floor.generate_floor_planning()  # Генерируем план этажа
             self.floors.append(floor)
         else:
@@ -52,7 +45,6 @@ class Building(GeometricFigure):
             print(f"Все этажи {common_apartment_floor_table}")
             floor = Floor(points=self.points, sections=self.sections,
                           apartment_table=common_apartment_floor_table,
-                          elevators=self.elevators, stairs=self.stairs,
                           building_polygon=self.polygon)
 
             floor.generate_floor_planning()  # Генерируем план этажа
@@ -70,10 +62,8 @@ class Building(GeometricFigure):
             }
             print(f"Первый этаж {last_apartment_floor_table}")
             # Создаем последний этаж с корректированным количеством квартир
-            print(self.sections)
             last_floor = Floor(points=self.points, sections=self.sections,
                                apartment_table=last_apartment_floor_table,
-                               elevators=self.elevators, stairs=self.stairs,
                                building_polygon=self.polygon)
             last_floor.generate_floor_planning()  # Генерируем план последнего этажа
 

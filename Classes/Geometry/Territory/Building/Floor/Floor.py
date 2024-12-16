@@ -10,16 +10,12 @@ from typing import List, Tuple, Dict
 class Floor(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]], sections: List[List[Tuple[float, float]]],
                  apartment_table: Dict,
-                 elevators: List['Elevator'] = None,
-                 stairs: List['Stair'] = None,
                  building_polygon: Polygon = None):
         super().__init__(points)  # Передаем points в конструктор родительского класса
         self.apartment_table = apartment_table  # Таблица квартир, переданная в класс
 
         # Создание секций
         self.sections_points = sections
-        self.elevators = elevators if elevators is not None else []
-        self.stairs = stairs if stairs is not None else []
         self.sections = []
         self.building_polygon = building_polygon
 
@@ -42,16 +38,6 @@ class Floor(GeometricFigure):
             section = Section(points=self.sections_points[0], apartment_table=self.apartment_table,
                               building_polygon=self.building_polygon)
             section.check_and_create_cell_grid(cell_size=1)
-            if len(self.elevators) > 0:
-                for elevator in self.elevators:
-                    if section.polygon.contains(elevator.polygon):
-                        section.elevators.append(elevator)
-                section.set_elevators()
-            if len(self.stairs) > 0:
-                for stair in self.stairs:
-                    if section.polygon.contains(stair.polygon):
-                        section.stairs.append(stair)
-                section.set_stairs()
 
             section.generate_section_planning(max_iterations=20)
             self.sections.append(section)
@@ -77,16 +63,6 @@ class Floor(GeometricFigure):
                 section = Section(points=points, apartment_table=apartment_section_table,
                                   building_polygon=self.building_polygon)
                 section.check_and_create_cell_grid(cell_size=1)
-                if len(self.elevators) > 0:
-                    for elevator in self.elevators:
-                        if section.polygon.contains(elevator.polygon):
-                            section.elevators.append(elevator)
-                    section.set_elevators()
-                if len(self.stairs) > 0:
-                    for stair in self.stairs:
-                        if section.polygon.contains(stair.polygon):
-                            section.stairs.append(stair)
-                    section.set_stairs()
 
                 section.generate_section_planning(max_iterations=20)
                 self.sections.append(section)
