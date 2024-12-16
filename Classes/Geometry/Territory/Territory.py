@@ -1,126 +1,106 @@
+from shapely.geometry import Polygon, MultiPolygon
 from Classes.Geometry.GeometricFigure import GeometricFigure
-from typing import List, Tuple, Dict
 from Classes.Geometry.Territory.Building.Building import Building
-from shapely.geometry import Polygon
+from typing import List, Tuple, Dict
 
-# Класс для территории, содержащей здания
+
 class Territory(GeometricFigure):
-    def __init__(self, points: List[Tuple[float, float]],
+    def __init__(self,
                  building_points: List[List[Tuple[float, float]]],
                  sections_coords: List[List[Tuple[float, float]]],
                  num_floors: int,
-                 apartment_table: Dict):
+                 apartment_table: Dict,
+                 elevators_coords: List[List[Tuple[float, float]]] = None,
+                 stairs_coords: List[List[Tuple[float, float]]] = None):
 
-        super().__init__(points)
+        # Автоматически создаём envelope для территории на основе building_points
+        combined_polygons = MultiPolygon([Polygon(points) for points in building_points])
+        envelope = combined_polygons.envelope
+
+        # Преобразуем envelope в список координат
+        territory_points = list(envelope.exterior.coords)
+
+        # Инициализируем GeometricFigure с построенными точками
+        super().__init__(territory_points)
+
         self.building_points = building_points
         self.num_floors = num_floors
         self.apartment_table = apartment_table
         self.buildings = []
+        self.elevators_coords = elevators_coords if elevators_coords is not None else []
+        self.stairs_coords = stairs_coords if stairs_coords is not None else []
         self.sections_coords = sections_coords if sections_coords is not None else building_points
 
     def generate_building_plannings(self):
-        # Проверяем и создаем сетку ячеек
-        self.check_and_create_cell_grid(cell_size=1)
-        total_area = 0.0  # Общая площадь территории
-        # Вычисляем общую площадь всех зданий
-        for points in self.building_points:
-            building_polygon = Polygon(points)
-            total_area += building_polygon.area
-        print(self.points)
-        print(self.building_points)
-        # Переменные для суммирования количества квартир
+        """
+        Генерирует планировки для всех зданий на территории.
+        """
+        total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
         total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}
 
-        # Перебираем здания и рассчитываем количество квартир
         for i, points in enumerate(self.building_points):
             building_polygon = Polygon(points)
-            proportioned_building_area = building_polygon.area / total_area  # Пропорция площади текущего здания
+            proportioned_area = building_polygon.area / total_area
 
-            # Создаем отдельный apartment_table для каждого здания на основе пропорции
-            apartment_building_table = {
-                k: {
-                    'area_range': v['area_range'],
-                    'percent': v['percent'],
-                    'number': int(proportioned_building_area * v['number'])
-                } for k, v in self.apartment_table.items()
+            # Создаем таблицу квартир для этого здания
+            building_apartment_table = {
+                apt_type: {
+                    'area_range': apt['area_range'],
+                    'percent': apt['percent'],
+                    'number': int(proportioned_area * apt['number'])
+                } for apt_type, apt in self.apartment_table.items()
             }
 
-
-            if len(self.building_points) == 1:
-                for apt_type in apartment_building_table.keys():
-                    apartment_building_table[apt_type].pop('number')
-                    apartment_building_table[apt_type]['number'] = self.apartment_table[apt_type]['number']
-
-                building = Building(points=points,
-                                    sections=self.sections_coords,
-                                    num_floors=self.num_floors,
-                                    apartment_table=apartment_building_table)
-                building.generate_floors()
-                self.buildings.append(building)
-                return self.buildings
-            # Убедитесь, что в последнем здании все квартиры распределены
-            if i == len(self.building_points) - 1:
-                for apt_type in apartment_building_table.keys():
-                    apartment_building_table[apt_type].pop('number')
-                    apartment_building_table[apt_type]['number'] = (self.apartment_table[apt_type]['number'] -
-                                                                   total_assigned_numbers[apt_type])
-            else:
-                # Обновляем общее распределенное количество квартир для каждого типа
-                for apt_type in apartment_building_table.keys():
-                    total_assigned_numbers[apt_type] += apartment_building_table[apt_type]['number']
-                    print(total_assigned_numbers)
-
-            print(f"Здание {i}: {apartment_building_table}")
-            # Создаем здания
             building = Building(points=points,
                                 sections=self.sections_coords,
                                 num_floors=self.num_floors,
-                                apartment_table=apartment_building_table)
+                                apartment_table=building_apartment_table)
             building.generate_floors()
             self.buildings.append(building)
 
-    def _calculate_total_error(self):
-        """Calculates the total error in apartment type distribution across all buildings and their floors."""
-        total_allocated_area = 0
-        actual_percentages = {}
-        total_apartment_table = {}
+        self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
+        print(self.total_error)
 
-        # Суммируем площади каждой квартиры во всех зданиях, этажах и секциях
-        for building in self.buildings:
+    def calculate_territory_error(self, buildings, apartment_table):
+        """
+        Подсчитывает общую ошибку отклонения площади квартир на уровне всей территории.
+
+        Args:
+            buildings (list): Список зданий, каждое из которых содержит квартиры и их площади.
+            apartment_table (dict): Таблица с ожидаемыми процентами площадей для типов квартир.
+
+        Returns:
+            float: Общая ошибка, равная сумме абсолютных отклонений фактических процентов от заданных.
+        """
+        total_allocated_area = 0  # Общая площадь всех квартир
+        type_areas = {apt_type: 0 for apt_type in apartment_table}  # Площадь по типам квартир
+
+        # Суммируем площади всех квартир во всех зданиях
+        for building in buildings:
             for floor in building.floors:
                 for section in floor.sections:
-                    for apt in section.apartments:
-                        total_allocated_area += apt.area
-                        apt_type = apt.type
-                        if apt_type in actual_percentages:
-                            actual_percentages[apt_type] += apt.area
-                        else:
-                            actual_percentages[apt_type] = apt.area
+                    for apartment in section.apartments:
+                        type_areas[apartment.type] += apartment.area
+                        total_allocated_area += apartment.area
 
-                        # Собираем общую информацию по квартире
-                        if apt_type in total_apartment_table:
-                            total_apartment_table[apt_type]['number'] += 1
-                        else:
-                            total_apartment_table[apt_type] = {
-                                'number': 1,
-                                'area_range': apt.area_range,  # Предполагается, что area_range есть в каждом apt
-                                'percent': apt.percent  # Предполагается, что percent есть в каждом apt
-                            }
+        # Проверка: если площадь квартир равна 0, возвращаем максимальную ошибку
+        if total_allocated_area == 0:
+            return float('inf')  # Ошибка максимальна, если квартиры не распределены
 
-        # Рассчитываем процент для каждой квартиры
-        for apt_type in total_apartment_table.keys():
-            actual_percent = (actual_percentages.get(apt_type,
-                                                     0) / total_allocated_area) * 100 if total_allocated_area > 0 else 0
-            total_apartment_table[apt_type]['actual_percent'] = actual_percent
+        # Вычисляем фактический процент площадей и общую ошибку
+        errors = []
+        for apt_type, values in apartment_table.items():
+            expected_percent = values['percent']
+            actual_percent = (type_areas[apt_type] / total_allocated_area) * 100
+            error = abs(expected_percent - actual_percent)  # Абсолютное отклонение
+            errors.append(error)
 
-        # Вычисляем общую ошибку
-        total_error = 0
-        for apt_type, info in total_apartment_table.items():
-            desired_percent = info['percent']
-            actual_percent = info.get('actual_percent', 0)
-            total_error += abs(desired_percent - actual_percent)
+            # Отладочная информация
+            print(
+                f"Тип: {apt_type}, Ожидаемый %: {expected_percent:.2f}, Фактический %: {actual_percent:.2f}, Ошибка: {error:.2f}")
+        average_error = sum(errors) / len(errors)
+        return average_error
 
-        return total_error
 
 
 
