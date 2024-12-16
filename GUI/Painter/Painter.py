@@ -6,6 +6,8 @@ from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint
 import math
 from threading import Thread
 
+from shapely import MultiPoint
+
 from Classes.Geometry.Territory.Building.Building import Building
 from Classes.Geometry.Territory.Building.Elevator import Elevator
 from Classes.Geometry.Territory.Building.Floor.Floor import Floor
@@ -16,7 +18,7 @@ from GUI.Painter.ElevatorRect import ElevatorRect
 from GUI.Painter.MovablePoint import MovablePoint
 from GUI.Painter.Outline import Outline
 from GUI.Painter.StairsRect import StairsRect
-from GUI.Threads.FloorGenerator import FloorGenerator
+from GUI.Threads.BuildingGenerator import BuildingGenerator
 
 
 def calculate_polygon_area(polygon):
@@ -315,15 +317,12 @@ class Painter(QGraphicsView):
             polygon.delete_edge_lengths()
         elevators = []
         stairs = []
-        elevator_objects = []
-        stairs_objects = []
         for stair in self.stairs:
             stair_object = [(stair.rect.sceneBoundingRect().topLeft().x(), stair.rect.sceneBoundingRect().topLeft().y()),
                  (stair.rect.sceneBoundingRect().bottomRight().x(), stair.rect.sceneBoundingRect().topLeft().y()),
                  (stair.rect.sceneBoundingRect().topLeft().x(), stair.rect.sceneBoundingRect().bottomRight().y()),
                  (stair.rect.sceneBoundingRect().bottomRight().x(), stair.rect.sceneBoundingRect().bottomRight().x())]
             stairs.append(stair_object)
-            stairs_objects.append(Stair(stair_object))
 
         for elevator in self.elevators:
             elevator_object = [(elevator.rect.sceneBoundingRect().topLeft().x(), elevator.rect.sceneBoundingRect().topLeft().y()),
@@ -331,21 +330,27 @@ class Painter(QGraphicsView):
                  (elevator.rect.sceneBoundingRect().topLeft().x(), elevator.rect.sceneBoundingRect().bottomRight().y()),
                  (elevator.rect.sceneBoundingRect().bottomRight().x(), elevator.rect.sceneBoundingRect().bottomRight().x())]
             elevators.append(elevator_object)
-            elevator_objects.append(Elevator(elevator_object))
 
-        for i in range(1, num_floors + 1):
-            floor = Floor(points=territory_points, sections=sections, apartment_table=apartment_table,
-                          elevators=elevator_objects, stairs=stairs_objects)
-            self.floors.append(floor)
-            self.worker = FloorGenerator(floor, apartment_table)
-            self.worker_thread = Thread(target=self.worker.run)
-            if i == num_floors:
-                self.worker.finished.connect(self.onApartmentsGenerated)
-            self.worker_thread.start()
+        if not stairs:
+            stairs = [[]]
+        if not elevators:
+            elevators = [[]]
 
-        territory = Territory(points=territory_points, building_points=buildings, sections_coords=sections,
+        territory = Territory(points=[(-100, -100), (100, -100), (100, 100), (-100, 100)], building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table,
                               elevators_coords=elevators, stairs_coords=stairs)
+
+        self.worker = BuildingGenerator(territory)
+        self.worker_thread = Thread(target=self.worker.run)
+        self.worker.finished.connect(self.onApartmentsGenerated)
+        self.worker_thread.start()
+
+        for i in range(1, num_floors + 1):
+            for building in territory.buildings:
+                for floor in building.floors:
+                    self.floors.append(floor)
+
+
 
     def onApartmentsGenerated(self, floor):
         # Цвета для разных типов квартир
