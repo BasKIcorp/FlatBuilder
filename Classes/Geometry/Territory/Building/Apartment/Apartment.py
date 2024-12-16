@@ -1,13 +1,15 @@
 from random import shuffle
 from turtledemo.penrose import start
 
+
+
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Apartment.Room import Room
 from Classes.Geometry.Territory.Building.Apartment.Window import Window
 from typing import List, Tuple
 import random
 import time
-from shapely.geometry import Polygon, MultiPolygon, LineString
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 from shapely.ops import unary_union
 import math
 
@@ -15,7 +17,9 @@ import math
 # Класс для квартиры, содержащей комнаты, мокрые зоны и балконы
 class Apartment(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
-                 apt_type: str, rooms: List['Room'] = None,
+                 apt_type: str,
+                 building_polygon: Polygon,
+                 rooms: List['Room'] = None,
                  cell_size: float = 1.0):
         super().__init__(points)
         self.type = apt_type  # Тип квартиры
@@ -25,11 +29,12 @@ class Apartment(GeometricFigure):
         room_table = self.get_room_types_by_apartment_type(self.type)
         self.total_rooms = sum(count for room_type, count in room_table)
         self.free_sides = []
-        self.building_perimeter_sides = []
         self.windows = []
         self.section_polygon = None
+        self.building_polygon = building_polygon
 
     def generate_apartment_planning(self):
+        self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
         max_iterations = 5
         best_plan = None
         best_score = float('inf')
@@ -110,25 +115,61 @@ class Apartment(GeometricFigure):
         if self.rooms:
             self._generate_windows()
 
+    from shapely.geometry import LineString, MultiLineString
+
+    from shapely.geometry import LineString, MultiLineString
+
+    from shapely.geometry import LineString, MultiLineString
+
     def _generate_windows(self):
         """Генерирует окна для комнат на внешних сторонах здания."""
-        used_perimeter_sides = set()  # Хранит стороны периметра, на которых уже есть окна
+        used_perimeter_sides = set()  # Хранит стороны периметра здания, на которых уже есть окна
 
         for room in self.rooms:
             if room.type not in ['living room', 'bedroom', 'kitchen']:
                 continue  # Только для определенных типов комнат
-            shuffled_sides = self.building_perimeter_sides[:]
-            random.shuffle(shuffled_sides)
-            for side in shuffled_sides:
+            new_room_polygon = room.polygon.simplify(tolerance=1, preserve_topology=True)
+            room_sides = [
+                LineString([new_room_polygon.exterior.coords[i],
+                            new_room_polygon.exterior.coords[i + 1]])
+                for i in range(len(new_room_polygon.exterior.coords) - 1)
+            ]
+
+            for room_side in room_sides:
                 # Проверяем пересечение стороны комнаты с периметром здания
-                if room.polygon.exterior.intersects(side) and side not in used_perimeter_sides:
+                if room_side.intersects(self.building_polygon.exterior):
                     # Находим пересекающийся участок
-                    intersection = room.polygon.exterior.intersection(side)
-                    if isinstance(intersection, LineString):
-                        # Создаем объект окна и добавляем его в комнату
-                        self.windows.append(Window(intersection))
-                        used_perimeter_sides.add(side)  # Помечаем эту сторону как занятую
-                        break  # Для данной комнаты окно уже назначено, выходим из цикла
+                    intersection = room_side.intersection(self.building_polygon.exterior)
+
+                    if isinstance(intersection, MultiLineString):
+                        # Объединяем MultiLineString в один LineString
+                        intersection = LineString([coord for line in intersection.geoms for coord in line.coords])
+
+                    if isinstance(intersection, LineString) and intersection.length > 0:
+                        # Проверяем длину пересечения
+                        if intersection.length < 1.5:
+                            continue
+
+                        # Находим центр пересечения
+                        midpoint = intersection.interpolate(0.5, normalized=True)
+
+                        # Вычисляем две точки на расстоянии 0.75 метра в обе стороны от центра
+                        start_distance = max(0, intersection.project(midpoint) - 0.75)
+                        end_distance = min(intersection.length, intersection.project(midpoint) + 0.75)
+
+                        if end_distance <= start_distance:
+                            continue
+
+                        # Находим точки начала и конца окна
+                        start_point = intersection.interpolate(start_distance)
+                        end_point = intersection.interpolate(end_distance)
+
+                        # Создаем LineString длиной 1.5 метра
+                        window_line = LineString([start_point, end_point])
+
+                        # Добавляем окно в комнату
+                        self.windows.append(Window(window_line))
+                        break  # Переходим к следующей комнате
 
     def _calc_total_error(self, rooms):
         def rectangularity_score(poly):
@@ -171,8 +212,7 @@ class Apartment(GeometricFigure):
             start_cell = self._get_next_start_cell(room_type)
         elif self.type != 'studio':
             return_cells = []
-            for side in self.building_perimeter_sides:
-                return_cells.extend([cell for cell in self.starting_corner_cells if cell['polygon'].intersects(side)])
+            return_cells.extend([cell for cell in self.starting_corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
             if len(return_cells) > 0:
                 start_cell = random.choice(return_cells)
             else:
@@ -240,15 +280,13 @@ class Apartment(GeometricFigure):
 
         if room_type in ['living_room', 'bedroom']:
             return_cells = []
-            for side in self.building_perimeter_sides:
-                return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(side)])
+            return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
             if len(return_cells) > 0:
                 return random.choice(return_cells)
 
         elif room_type == 'kitchen':
             return_cells = []
-            for side in self.building_perimeter_sides:
-                return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(side)])
+            return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
             if len(return_cells) > 0:
                 return random.choice(return_cells)
             else:

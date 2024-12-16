@@ -9,6 +9,8 @@ from typing import List, Tuple, Dict
 import time
 
 
+
+
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
@@ -157,7 +159,7 @@ class Section(GeometricFigure):
                 #     continue
                 self._update_cell_properties(apartment_cells)
                 
-                apartment = Apartment(points=points, apt_type=apt_type)
+                apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
                 apartments.append(apartment)
                 allocated_cell_count -= len(apartment_cells)
                 remaining_cell_counts[apt_type] = allocated_cell_count
