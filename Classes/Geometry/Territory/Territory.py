@@ -38,7 +38,7 @@ class Territory(GeometricFigure):
         Генерирует планировки для всех зданий на территории.
         """
         total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
-
+        print(self.sections_coords)
         if len(self.building_points) == 1:
             # Если здание одно, отправляем исходную apartment_table
             building = Building(points=self.building_points[0],

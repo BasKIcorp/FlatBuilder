@@ -17,12 +17,14 @@ class Building(GeometricFigure):
         super().__init__(points)
         self.floors = []  # Список этажей в здании
         self.num_floors = num_floors  # Количество этажей
-        self.sections = [section for section in sections if Polygon(points).contains(Polygon(section).exterior or
+        self.sections = [section for section in sections if Polygon(points).contains(Polygon(section) or
                                                                                      Polygon(points).equals(Polygon(section)))]
         self.apartment_table = apartment_table  # Таблица квартир
         self.message = None  # Для сообщений об ошибках
 
     def generate_floors(self):
+        print(self.points)
+        print(self.sections)
         """Генерирует этажи, добавляя их в список floors."""
         if self.num_floors == 1:
             floor = Floor(points=self.points,

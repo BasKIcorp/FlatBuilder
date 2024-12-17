@@ -26,7 +26,7 @@ class Floor(GeometricFigure):
         """
         self.cells = None
         self.check_and_create_cell_grid(cell_size=cell_size)
-
+        print(len(self.sections_points))
         if len(self.sections_points) == 1:
             # Если секция одна, таблица остаётся неизменной
             section = Section(points=self.sections_points[0],
@@ -50,8 +50,13 @@ class Floor(GeometricFigure):
     def _distribute_apartment_table_among_sections(self):
         """
         Распределяет квартиры по секциям на основе их площадей.
-        Если после округления остаются квартиры с нулевым значением, распределяет их случайно.
+        Если пропорциональное распределение дает 0, квартиры распределяются по секциям по очереди.
         """
+        # Проверка на пустые секции
+        if not self.sections_points:
+            print("Ошибка: Список секций пуст. Невозможно распределить квартиры.")
+            return None
+
         total_area = sum(Polygon(points).area for points in self.sections_points)
         section_areas = [Polygon(points).area for points in self.sections_points]
 
@@ -63,26 +68,31 @@ class Floor(GeometricFigure):
 
         for apt_type, apt_info in self.apartment_table.items():
             total_number = apt_info['number']
-            distributed_numbers = []
-            for area in section_areas:
-                proportioned_number = floor(total_number * (area / total_area))
-                distributed_numbers.append(proportioned_number)
-            # Вычитаем распределенные числа
-            remaining_numbers[apt_type] -= sum(distributed_numbers)
+            distributed_numbers = [0] * len(self.sections_points)  # Изначально все по 0
 
-            # Сохраняем в таблицы для секций
-            for idx, number in enumerate(distributed_numbers):
-                section_tables[idx][apt_type] = {
-                    'area_range': apt_info['area_range'],
-                    'percent': apt_info['percent'],
-                    'number': number
-                }
+            if total_number > 0:
+                for idx, area in enumerate(section_areas):
+                    proportioned_number = floor(total_number * (area / total_area))
+                    distributed_numbers[idx] = proportioned_number
 
-        # Шаг 2: Распределение оставшихся квартир случайным образом
-        for apt_type, remaining in remaining_numbers.items():
-            while remaining > 0:
-                idx = random.randint(0, len(self.sections_points) - 1)
-                section_tables[idx][apt_type]['number'] += 1
-                remaining -= 1
+                # Суммируем распределенные квартиры и вычисляем остаток
+                total_assigned = sum(distributed_numbers)
+                remaining = total_number - total_assigned
+
+                # Шаг 2: Если остались квартиры, распределяем их по секциям по очереди
+                while remaining > 0:
+                    for idx in range(len(self.sections_points)):
+                        if remaining == 0:
+                            break
+                        distributed_numbers[idx] += 1
+                        remaining -= 1
+
+                # Шаг 3: Сохраняем распределенные квартиры в таблицы секций
+                for idx, number in enumerate(distributed_numbers):
+                    section_tables[idx][apt_type] = {
+                        'area_range': apt_info['area_range'],
+                        'percent': apt_info['percent'],
+                        'number': number
+                    }
 
         return section_tables
