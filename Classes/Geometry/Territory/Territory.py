@@ -38,7 +38,9 @@ class Territory(GeometricFigure):
         Генерирует планировки для всех зданий на территории.
         """
         total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
-        print(self.sections_coords)
+        if not self.validate_initial_planning():
+            print(self.messages)
+            return None
         if len(self.building_points) == 1:
             # Если здание одно, отправляем исходную apartment_table
             building = Building(points=self.building_points[0],
@@ -46,10 +48,10 @@ class Territory(GeometricFigure):
                                 num_floors=self.num_floors,
                                 apartment_table=self.apartment_table)
             building.generate_floors()
-            if building.message:
-                self.messages.append(building.message)  # Сохраняем сообщение
-                print(f"Ошибка в здании {i + 1}: {building.message}")
-
+            if building is None:
+                if building.message:
+                    self.messages.append(building.message)  # Сохраняем сообщение
+                return None
 
             self.buildings.append(building)
 
@@ -59,17 +61,16 @@ class Territory(GeometricFigure):
             building_polygon = Polygon(points)
             building_area = building_polygon.area
             proportioned_table = self._distribute_apartment_table(i, building_area, total_area, total_assigned_numbers)
-            print(f" Территория {proportioned_table}")
             # Создаем здание с распределенной таблицей
             building = Building(points=points,
                                 sections=self.sections_coords,
                                 num_floors=self.num_floors,
                                 apartment_table=proportioned_table)
             building.generate_floors()
-            if building.message:
-                self.messages.append(building.message)  # Сохраняем сообщение
-                print(f"Ошибка в здании {i + 1}: {building.message}")
-                break  # Прерываем генерацию всех остальных зданий
+            if building is None:
+                if building.message:
+                    self.messages.append(building.message)  # Сохраняем сообщение
+                return None
 
             self.buildings.append(building)
 
@@ -216,3 +217,35 @@ class Territory(GeometricFigure):
             print("Сообщения об ошибках:")
             for msg in self.messages:
                 print(f"- {msg}")
+
+    def validate_initial_planning(self):
+        """
+        Проверяет, возможно ли планирование по изначальной таблице квартир apartment_table.
+        Если площадь средняя между минимальной и потенциальной площадью меньше 0.7 * allocatable_area,
+        отправляет сообщение с требованием уменьшить количество квартир или площадь.
+        """
+        # Шаг 1: Расчет минимальной и максимальной потенциальной площади
+        min_potential_area = sum(apt_info['area_range'][0] * apt_info['number']
+                                 for apt_info in self.apartment_table.values())
+        max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
+                                 for apt_info in self.apartment_table.values())
+
+        # Шаг 2: Расчет площади для аллокации
+        total_building_area = sum(Polygon(points).area for points in self.building_points)
+        allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
+
+        # Шаг 3: Средняя потенциальная площадь
+        avg_potential_area = (min_potential_area + max_potential_area) / 2
+
+        # Шаг 4: Проверка условия
+        threshold_area = 0.7 * allocatable_area  # Пороговое значение 70% от площади для аллокации
+        if not avg_potential_area < threshold_area:
+            # Шаг 5: Расчет минимальной площади для уменьшения
+            min_area_to_reduce = avg_potential_area - threshold_area
+            # Формирование сообщения
+            self.messages.append(
+                f"Пожалуйста, уменьшите количество квартир/площадь. Минимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
+            )
+            return False  # Планирование невозможно
+
+        return True  # Планирование возможно

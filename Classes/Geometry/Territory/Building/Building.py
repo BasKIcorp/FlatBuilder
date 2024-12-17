@@ -23,8 +23,6 @@ class Building(GeometricFigure):
         self.message = None  # Для сообщений об ошибках
 
     def generate_floors(self):
-        print(self.points)
-        print(self.sections)
         """Генерирует этажи, добавляя их в список floors."""
         if self.num_floors == 1:
             floor = Floor(points=self.points,

@@ -10,7 +10,6 @@ import time
 
 
 
-
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
@@ -30,11 +29,6 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
-        valid_table, message = self.validate_apartment_table()
-        if not valid_table:
-            print(message)  # Печать причины, если планирование невозможно
-        else:
-            print("Планирование возможно!")
 
         # Create the cell grid once
 
@@ -57,7 +51,6 @@ class Section(GeometricFigure):
 
             if not self._validate_apartments_free_sides(apartments):
                 # Allocation is invalid, skip to next iteration
-                # print(f"Iteration {iteration + 1}: Allocation rejected due to lack of free sides.")
                 for apart in apartments:
                     apart.check_and_create_cell_grid(cell_size=1)
                     apart._reset_cell_assignments()
@@ -70,7 +63,6 @@ class Section(GeometricFigure):
             if total_rectangularity_error < best_rectangularity:
                 best_rectangularity = total_rectangularity_error
                 best_plan = apartments
-            print(best_rectangularity)
             if best_rectangularity < 0.01:
                 break
 
@@ -333,99 +325,7 @@ class Section(GeometricFigure):
 
 
 
-    # def _calculate_total_error(self, apartments):
-    #     """Calculates the total error in apartment type distribution among allocated area."""
-    #     # Calculate the total allocated area
-    #     total_allocated_area = sum(apt.area for apt in apartments)
-    #
-    #     # Calculate actual percentages among allocated area
-    #     actual_percentages = {}
-    #     for apt_type in self.apartment_table.keys():
-    #         total_type_area = sum(apt.area for apt in apartments if apt.type == apt_type)
-    #         actual_percent = (total_type_area / total_allocated_area) * 100 if total_allocated_area > 0 else 0
-    #         actual_percentages[apt_type] = actual_percent
-    #
-    #     # Calculate total desired percentage
-    #     total_desired_percent = sum(apt_info['percent'] for apt_info in self.apartment_table.values())
-    #
-    #     # Normalize desired percentages to sum up to 100%
-    #     normalized_desired_percentages = {}
-    #     for apt_type, apt_info in self.apartment_table.items():
-    #         normalized_percent = (apt_info['percent'] / total_desired_percent) * 100 if total_desired_percent > 0 else 0
-    #         normalized_desired_percentages[apt_type] = normalized_percent
-    #
-    #     # Calculate total error based on normalized desired percentages
-    #     total_error = sum(
-    #         abs(normalized_desired_percentages[apt_type] - actual_percentages.get(apt_type, 0))
-    #         for apt_type in self.apartment_table.keys()
-    #     )
-    #     return total_error
 
-
-
-
-
-
-    def validate_apartment_table(self):
-        """Проверяет, возможно ли выделить квартиры с заданными 'number' и 'percent'."""
-        total_area = self.polygon.area  # Общая площадь этажа
-        total_required_area = 0  # Общая требуемая площадь для всех квартир
-        number_of_apartments = 0  # Общее количество квартир
-        apartment_min_areas = {}  # Минимальные площадки для расчетов
-
-        # Подсчет площади для заданной конфигурации
-        for apt_type, apt_info in self.apartment_table.items():
-            number = apt_info['number']
-            area_range = apt_info['area_range']
-
-            # Минимальная и максимальная площадь для данного типа квартир
-            min_area_for_type = area_range[0] * number
-            max_area_for_type = area_range[1] * number
-
-            apartment_min_areas[apt_type] = min_area_for_type
-
-            total_required_area += max_area_for_type
-            number_of_apartments += number
-
-        # Проверка на достаточно ли площади с учетом того что должно заниматься 20% коридором
-        if total_required_area > 0.8 * total_area:
-            return False, "Недостаточно площади для выделения всех типов квартир на заданной площади. Уменьшите количество квартир или площади квартир"
-
-        # Проверка по процентам на основе общей площади квартир
-        total_area_needed_by_percent = 0  # Общая площадь, требуемая по процентам
-
-        for apt_type, apt_info in self.apartment_table.items():
-            percent = apt_info['percent']
-
-            # Суммируем минимально необходимую площадь
-            total_area_needed_by_percent += apartment_min_areas[apt_type]
-
-            # Необходимая площадь для данного типа квартир по проценту
-            required_area_for_type = (percent / 100) * total_required_area
-
-            # Проверка по максимальной площади
-            if apartment_min_areas[apt_type] > required_area_for_type:
-                return False, f"{apt_type}: Минимальная площадь ({apartment_min_areas[apt_type]}) превышает выделяемую площадь по проценту ({required_area_for_type})."
-
-        # Рассчет альтернативных параметров для достижения меньшей ошибки
-        alternative_parameters = []
-        for apt_type, apt_info in self.apartment_table.items():
-            percent = apt_info['percent']
-            optimal_area = (percent / 100) * total_required_area  # Необходимая площадь по проценту
-
-            possible_min = apt_info['number'] * apt_info['area_range'][0]
-            possible_max = apt_info['number'] * apt_info['area_range'][1]
-
-            # Предложение оптимального числа квартир
-            if possible_max > optimal_area:
-                alternative_parameters.append({
-                    'type': apt_type,
-                    'optimal_number': max(0, int(optimal_area / apt_info['area_range'][1])),
-                    'min_area_needed': possible_min,
-                    'max_area_needed': possible_max
-                })
-
-        return True, alternative_parameters  # Возвращаем True и альтернативные параметры
 
     def fill_section_perimeter(self, cells, apartment_cells, max_area):
         """
