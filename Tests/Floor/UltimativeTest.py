@@ -32,8 +32,7 @@ room_colors = {
 }
 
 # Создание объекта территории
-territory = Territory(territory_polygon,
-                      buildings_polygons,
+territory = Territory(buildings_polygons,
                       sections_polygons,
                       num_floors,
                       apartment_table)
@@ -146,6 +145,7 @@ ax.set_title('Второй-до-последнего этаж второго з�
 ax.set_xlim(second_to_last_floor_bldg_2.polygon.bounds[0] - 10, second_to_last_floor_bldg_2.polygon.bounds[2] + 10)
 ax.set_ylim(second_to_last_floor_bldg_2.polygon.bounds[1] - 10, second_to_last_floor_bldg_2.polygon.bounds[3] + 10)
 ax.set_aspect('equal', adjustable='box')
-
+print(territory.output_table)
+print(territory.total_error)
 plt.tight_layout()
 plt.show()

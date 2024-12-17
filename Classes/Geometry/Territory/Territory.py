@@ -59,7 +59,7 @@ class Territory(GeometricFigure):
             self.buildings.append(building)
 
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
-        print(self.total_error)
+        self.output_table = self.generate_output_table()
 
     def calculate_territory_error(self, buildings, apartment_table):
         """
@@ -101,6 +101,50 @@ class Territory(GeometricFigure):
         average_error = sum(errors) / len(errors)
         return average_error
 
+    def generate_output_table(self):
+        """
+        Генерирует выходную таблицу с фактическими данными после планирования территории.
+
+        Возвращает:
+            dict: Выходная таблица в формате словаря.
+        """
+        # Инициализация словаря для фактических значений
+        actual_data = {apt_type: {
+            'area_range': (float('inf'), float('-inf')),  # Минимальная и максимальная площадь
+            'percent': 0,  # Фактический процент
+            'number': 0,  # Фактическое количество
+            'error': 0  # Ошибка
+        } for apt_type in self.apartment_table.keys()}
+
+        total_allocated_area = 0
+
+        # Обход всех зданий и квартир для подсчета фактических значений
+        for building in self.buildings:
+            for floor in building.floors:
+                for section in floor.sections:
+                    for apartment in section.apartments:
+                        apt_type = apartment.type
+                        apt_area = apartment.area
+
+                        # Обновляем минимальную и максимальную площадь
+                        min_area, max_area = actual_data[apt_type]['area_range']
+                        actual_data[apt_type]['area_range'] = (min(min_area, apt_area), max(max_area, apt_area))
+                        actual_data[apt_type]['number'] += 1  # Считаем количество квартир
+                        actual_data[apt_type]['percent'] += apt_area  # Суммируем площади
+                        total_allocated_area += apt_area
+
+        # Рассчитываем фактический процент и ошибки
+        for apt_type, data in actual_data.items():
+            # Финальные значения для процентов
+            data['percent'] = (data['percent'] / total_allocated_area) * 100 if total_allocated_area > 0 else 0
+            expected_percent = self.apartment_table[apt_type]['percent']
+            data['error'] = abs(expected_percent - data['percent'])  # Абсолютная ошибка
+
+            # Преобразуем range, если не было квартир
+            if data['area_range'][0] == float('inf'):
+                data['area_range'] = (0, 0)
+
+        return actual_data
 
 
 
