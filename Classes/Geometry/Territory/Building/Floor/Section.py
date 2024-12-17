@@ -19,10 +19,11 @@ class Section(GeometricFigure):
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.queue_corners_to_allocate = []
         self.free_cells = []
-        self.apartment_table = apartment_table
+        self.apartment_table = self._clean_apartment_table(apartment_table)
         self.building_polygon = building_polygon
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
+        print(self.apartment_table)
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -108,16 +109,12 @@ class Section(GeometricFigure):
         remaining_cells = [cell for cell in cells if not cell['assigned']]
         self.initial_corner_cells = [cell for cell in cells if cell['is_corner']]
 
-        # Calculate the number of cells for each apartment type
-        cell_counts, remaining_cell_counts = self._calculate_cell_counts(cells)
-
         for apt_type, apt_info in reversed(self.apartment_table.items()):
 
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
-            allocated_cell_count = remaining_cell_counts[apt_type]
             number = apt_info['number']
             minimum = min_cells * number
-            while number > 0 or allocated_cell_count > minimum:
+            while number > 0:
                 apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
@@ -169,8 +166,6 @@ class Section(GeometricFigure):
                 
                 apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
                 apartments.append(apartment)
-                allocated_cell_count -= len(apartment_cells)
-                remaining_cell_counts[apt_type] = allocated_cell_count
                 number -= 1
 
 
@@ -262,7 +257,7 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(min_cells, (max_cells-min_cells) * 0.8 + min_cells)
+        apt_cell_count = random.randint(min_cells, int((max_cells-min_cells) * 0.8 + min_cells))
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
@@ -376,5 +371,11 @@ class Section(GeometricFigure):
         else:
             return initial_apartment_cells
         return apartment_cells
+
+    def _clean_apartment_table(self, apartment_table: Dict) -> Dict:
+        """
+        Удаляет из apartment_table типы квартир, у которых number = 0.
+        """
+        return {apt_type: data for apt_type, data in apartment_table.items() if data['number'] > 0}
 
 

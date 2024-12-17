@@ -19,14 +19,15 @@ class Building(GeometricFigure):
         self.num_floors = num_floors  # Количество этажей
         self.sections = [section for section in sections if Polygon(points).contains(Polygon(section) or
                                                                                      Polygon(points).equals(Polygon(section)))]
-        self.apartment_table = apartment_table  # Таблица квартир
+        self.apartment_table = self._clean_apartment_table(apartment_table)
         self.message = None  # Для сообщений об ошибках
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
+        print(f"Количество этажей {self.num_floors}")
         if self.num_floors == 1:
             floor = Floor(points=self.points,
-                          sections=self.sections,
+                          sections_list=self.sections,
                           apartment_table=self.apartment_table,
                           building_polygon=self.polygon)
             floor.generate_floor_planning()
@@ -40,7 +41,7 @@ class Building(GeometricFigure):
 
             # Генерация этажей при успешном распределении
             first_floor = Floor(points=self.points,
-                                sections=self.sections,
+                                sections_list=self.sections,
                                 apartment_table=floor_tables[0],
                                 building_polygon=self.polygon)
             first_floor.generate_floor_planning()
@@ -48,7 +49,7 @@ class Building(GeometricFigure):
 
             # Второй этаж как эталон
             second_floor = Floor(points=self.points,
-                                 sections=self.sections,
+                                 sections_list=self.sections,
                                  apartment_table=floor_tables[1],
                                  building_polygon=self.polygon)
             second_floor.generate_floor_planning()
@@ -90,4 +91,10 @@ class Building(GeometricFigure):
                 'number': remaining
             }
         return floor_tables
+
+    def _clean_apartment_table(self, apartment_table: Dict) -> Dict:
+        """
+        Удаляет из apartment_table типы квартир, у которых number = 0.
+        """
+        return {apt_type: data for apt_type, data in apartment_table.items() if data['number'] > 0}
 

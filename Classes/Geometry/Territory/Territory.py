@@ -37,6 +37,7 @@ class Territory(GeometricFigure):
         """
         Генерирует планировки для всех зданий на территории.
         """
+        print(f"Количество зданий {len(self.building_points)}")
         total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
         if not self.validate_initial_planning():
             print(self.messages)
@@ -54,7 +55,7 @@ class Territory(GeometricFigure):
                 return None
 
             self.buildings.append(building)
-
+            return
         total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}
 
         for i, points in enumerate(self.building_points):
@@ -76,6 +77,7 @@ class Territory(GeometricFigure):
 
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
         self.output_table = self.generate_output_table()
+        print(self.output_table)
 
     def _distribute_apartment_table(self, building_index, building_area, total_area, total_assigned_numbers):
         """
@@ -238,7 +240,7 @@ class Territory(GeometricFigure):
         avg_potential_area = (min_potential_area + max_potential_area) / 2
 
         # Шаг 4: Проверка условия
-        threshold_area = 0.7 * allocatable_area  # Пороговое значение 70% от площади для аллокации
+        threshold_area = 0.7 * allocatable_area + 0.5 * total_building_area  # 50% для первого этажа, 70% для остальных
         if not avg_potential_area < threshold_area:
             # Шаг 5: Расчет минимальной площади для уменьшения
             min_area_to_reduce = avg_potential_area - threshold_area
