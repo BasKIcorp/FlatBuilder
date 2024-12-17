@@ -9,10 +9,10 @@ class Territory(GeometricFigure):
                  building_points: List[List[Tuple[float, float]]],
                  sections_coords: List[List[Tuple[float, float]]],
                  num_floors: int,
-                 apartment_table: Dict,
-                 elevators_coords: List[List[Tuple[float, float]]] = None,
-                 stairs_coords: List[List[Tuple[float, float]]] = None):
+                 apartment_table: Dict):
 
+        # Очистка apartment_table от типов квартир с number = 0
+        self.apartment_table = self._clean_apartment_table(apartment_table)
         # Автоматически создаём envelope для территории на основе building_points
         combined_polygons = MultiPolygon([Polygon(points) for points in building_points])
         envelope = combined_polygons.envelope
@@ -27,39 +27,91 @@ class Territory(GeometricFigure):
         self.num_floors = num_floors
         self.apartment_table = apartment_table
         self.buildings = []
-        self.elevators_coords = elevators_coords if elevators_coords is not None else []
-        self.stairs_coords = stairs_coords if stairs_coords is not None else []
+        self.messages = []  # Для хранения сообщений об ошибках
         self.sections_coords = sections_coords if sections_coords is not None else building_points
+        self.total_error = None
+        self.output_table = None
+
 
     def generate_building_plannings(self):
         """
         Генерирует планировки для всех зданий на территории.
         """
         total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
+
+        if len(self.building_points) == 1:
+            # Если здание одно, отправляем исходную apartment_table
+            building = Building(points=self.building_points[0],
+                                sections=self.sections_coords,
+                                num_floors=self.num_floors,
+                                apartment_table=self.apartment_table)
+            building.generate_floors()
+            if building.message:
+                self.messages.append(building.message)  # Сохраняем сообщение
+                print(f"Ошибка в здании {i + 1}: {building.message}")
+
+
+            self.buildings.append(building)
+
         total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}
 
         for i, points in enumerate(self.building_points):
             building_polygon = Polygon(points)
-            proportioned_area = building_polygon.area / total_area
-
-            # Создаем таблицу квартир для этого здания
-            building_apartment_table = {
-                apt_type: {
-                    'area_range': apt['area_range'],
-                    'percent': apt['percent'],
-                    'number': int(proportioned_area * apt['number'])
-                } for apt_type, apt in self.apartment_table.items()
-            }
-
+            building_area = building_polygon.area
+            proportioned_table = self._distribute_apartment_table(i, building_area, total_area, total_assigned_numbers)
+            print(f" Территория {proportioned_table}")
+            # Создаем здание с распределенной таблицей
             building = Building(points=points,
                                 sections=self.sections_coords,
                                 num_floors=self.num_floors,
-                                apartment_table=building_apartment_table)
+                                apartment_table=proportioned_table)
             building.generate_floors()
+            if building.message:
+                self.messages.append(building.message)  # Сохраняем сообщение
+                print(f"Ошибка в здании {i + 1}: {building.message}")
+                break  # Прерываем генерацию всех остальных зданий
+
             self.buildings.append(building)
 
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
         self.output_table = self.generate_output_table()
+
+    def _distribute_apartment_table(self, building_index, building_area, total_area, total_assigned_numbers):
+        """
+        Распределяет количество квартир для здания на основе его площади.
+
+        Args:
+            building_index (int): Индекс текущего здания.
+            building_area (float): Площадь текущего здания.
+            total_area (float): Общая площадь всех зданий.
+            total_assigned_numbers (dict): Сумма квартир уже распределенных по зданиям.
+
+        Returns:
+            dict: apartment_table для текущего здания.
+        """
+        distributed_table = {}
+
+        for apt_type, apt_info in self.apartment_table.items():
+            if building_index == len(self.building_points) - 1:
+                # Для последнего здания корректируем число квартир
+                remaining_number = apt_info['number'] - total_assigned_numbers[apt_type]
+                distributed_table[apt_type] = {
+                    'area_range': apt_info['area_range'],
+                    'percent': apt_info['percent'],
+                    'number': remaining_number
+                }
+            else:
+                # Рассчитываем пропорциональное количество квартир
+                proportioned_number = round(apt_info['number'] * (building_area / total_area))
+                total_assigned_numbers[apt_type] += proportioned_number
+
+                distributed_table[apt_type] = {
+                    'area_range': apt_info['area_range'],
+                    'percent': apt_info['percent'],
+                    'number': proportioned_number
+                }
+
+        return distributed_table
 
     def calculate_territory_error(self, buildings, apartment_table):
         """
@@ -146,6 +198,21 @@ class Territory(GeometricFigure):
 
         return actual_data
 
+    def _clean_apartment_table(self, apartment_table: Dict) -> Dict:
+        """
+        Удаляет из apartment_table типы квартир, у которых number = 0.
 
+        Args:
+            apartment_table (dict): Исходная таблица с типами квартир.
 
+        Returns:
+            dict: Очищенная таблица.
+        """
+        cleaned_table = {apt_type: data for apt_type, data in apartment_table.items() if data['number'] > 0}
+        return cleaned_table
 
+    def print_messages(self):
+        if self.messages:
+            print("Сообщения об ошибках:")
+            for msg in self.messages:
+                print(f"- {msg}")

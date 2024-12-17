@@ -5,7 +5,8 @@ from Classes.Geometry.Territory.Building.Stair import Stair
 from shapely.geometry import Polygon
 from shapely.ops import unary_union
 from typing import List, Tuple, Dict
-
+import random
+from math import floor
 
 class Floor(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]], sections: List[List[Tuple[float, float]]],
@@ -20,49 +21,68 @@ class Floor(GeometricFigure):
         self.building_polygon = building_polygon
 
     def generate_floor_planning(self, cell_size=1):
+        """
+        Генерирует планировку этажа, распределяя квартиры по секциям.
+        """
         self.cells = None
         self.check_and_create_cell_grid(cell_size=cell_size)
-        # Создаем apartment_section_table
-        total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}  # Инициализация счетчиков
-        apartment_section_table = {
-            k: {
-                'area_range': v['area_range'],
-                'percent': v['percent'],
-                'number': 0
-            } for k, v in self.apartment_table.items()
-        }
 
-        # Перебираем секции и рассчитываем количество квартир
-        total_section_area = sum(Polygon(points).area for points in self.sections_points)  # Общая площадь секций
         if len(self.sections_points) == 1:
-            section = Section(points=self.sections_points[0], apartment_table=self.apartment_table,
+            # Если секция одна, таблица остаётся неизменной
+            section = Section(points=self.sections_points[0],
+                              apartment_table=self.apartment_table,
                               building_polygon=self.building_polygon)
             section.check_and_create_cell_grid(cell_size=1)
-
             section.generate_section_planning(max_iterations=20)
             self.sections.append(section)
         else:
-            for i, points in enumerate(self.sections_points):
-                section_polygon = Polygon(points)
-                proportioned_section_area = section_polygon.area / total_section_area if total_section_area > 0 else 0  # Пропорции площади секции
-
-                if i == len(self.sections_points) - 1:
-                    for apt_type in apartment_section_table.keys():
-                        apartment_section_table[apt_type].pop('number')
-                        apartment_section_table[apt_type]['number'] = (self.apartment_table[apt_type]['number'] -
-                                                                      total_assigned_numbers[apt_type])
-                else:
-                    for apt_type in apartment_section_table.keys():
-                        assigned_number = int(proportioned_section_area * self.apartment_table[apt_type]['number'])
-                        apartment_section_table[apt_type].pop('number')
-                        apartment_section_table[apt_type]['number'] = assigned_number
-                        total_assigned_numbers[apt_type] += assigned_number
-                print(f"Секция {i}: {apartment_section_table}")
-
-                # Создаем секцию
-                section = Section(points=points, apartment_table=apartment_section_table,
+            # Распределение квартир по секциям
+            section_tables = self._distribute_apartment_table_among_sections()
+            for i, (points, section_table) in enumerate(zip(self.sections_points, section_tables)):
+                print(f" Секция {section_table}")
+                section = Section(points=points,
+                                  apartment_table=section_table,
                                   building_polygon=self.building_polygon)
                 section.check_and_create_cell_grid(cell_size=1)
-
                 section.generate_section_planning(max_iterations=20)
                 self.sections.append(section)
+
+    def _distribute_apartment_table_among_sections(self):
+        """
+        Распределяет квартиры по секциям на основе их площадей.
+        Если после округления остаются квартиры с нулевым значением, распределяет их случайно.
+        """
+        total_area = sum(Polygon(points).area for points in self.sections_points)
+        section_areas = [Polygon(points).area for points in self.sections_points]
+
+        # Инициализация таблиц для каждой секции
+        section_tables = [{} for _ in self.sections_points]
+
+        # Шаг 1: Первичное распределение по площадям с округлением вниз
+        remaining_numbers = {apt_type: apt_info['number'] for apt_type, apt_info in self.apartment_table.items()}
+
+        for apt_type, apt_info in self.apartment_table.items():
+            total_number = apt_info['number']
+            distributed_numbers = []
+            for area in section_areas:
+                proportioned_number = floor(total_number * (area / total_area))
+                distributed_numbers.append(proportioned_number)
+            # Вычитаем распределенные числа
+            remaining_numbers[apt_type] -= sum(distributed_numbers)
+
+            # Сохраняем в таблицы для секций
+            for idx, number in enumerate(distributed_numbers):
+                section_tables[idx][apt_type] = {
+                    'area_range': apt_info['area_range'],
+                    'percent': apt_info['percent'],
+                    'number': number
+                }
+
+        # Шаг 2: Распределение оставшихся квартир случайным образом
+        for apt_type, remaining in remaining_numbers.items():
+            while remaining > 0:
+                idx = random.randint(0, len(self.sections_points) - 1)
+                section_tables[idx][apt_type]['number'] += 1
+                remaining -= 1
+
+        return section_tables

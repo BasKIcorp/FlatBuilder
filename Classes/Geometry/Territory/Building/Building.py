@@ -5,7 +5,8 @@ from Classes.Geometry.Territory.Building.Stair import Stair
 from typing import List, Tuple, Dict
 import copy
 from shapely import Polygon
-
+from math import floor
+import random
 
 
 class Building(GeometricFigure):
@@ -18,53 +19,75 @@ class Building(GeometricFigure):
         self.num_floors = num_floors  # Количество этажей
         self.sections = [section for section in sections if Polygon(points).contains(Polygon(section).exterior or
                                                                                      Polygon(points).equals(Polygon(section)))]
-        self.apartment_table = apartment_table  # Таблица квартир, переданная в класс
-        # Создаем лифты и лестницы
+        self.apartment_table = apartment_table  # Таблица квартир
+        self.message = None  # Для сообщений об ошибках
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
-        total_assigned_numbers = {apt_type: 0 for apt_type in
-                                  self.apartment_table.keys()}  # Инициализация счетчиков для квартир
         if self.num_floors == 1:
-            self.sections = [self.points]
-            floor = Floor(points=self.points, sections=self.sections,
+            floor = Floor(points=self.points,
+                          sections=self.sections,
                           apartment_table=self.apartment_table,
-                          building_polygon=Polygon(self.points))
-            floor.generate_floor_planning()  # Генерируем план этажа
+                          building_polygon=self.polygon)
+            floor.generate_floor_planning()
             self.floors.append(floor)
         else:
-            # Создаем общий этаж для первых num_floors - 1 этажей
-            common_apartment_floor_table = {
-                k: {
-                    'area_range': v['area_range'],
-                    'percent': v['percent'],
-                    'number': v['number'] // (self.num_floors - 1)
-                    # Учитываем деление на количество этажей
-                } for k, v in self.apartment_table.items()
+            # Распределяем таблицу квартир между этажами
+            floor_tables = self._distribute_apartment_table_among_floors()
+
+            if not floor_tables:  # Если floor_tables вернул None из-за ошибки
+                return  # Прерываем генерацию этажей
+
+            # Генерация этажей при успешном распределении
+            first_floor = Floor(points=self.points,
+                                sections=self.sections,
+                                apartment_table=floor_tables[0],
+                                building_polygon=self.polygon)
+            first_floor.generate_floor_planning()
+            self.floors.append(first_floor)
+
+            # Второй этаж как эталон
+            second_floor = Floor(points=self.points,
+                                 sections=self.sections,
+                                 apartment_table=floor_tables[1],
+                                 building_polygon=self.polygon)
+            second_floor.generate_floor_planning()
+
+            # Добавляем второй и все последующие этажи
+            for _ in range(1, self.num_floors):
+                self.floors.append(second_floor)
+
+    def _distribute_apartment_table_among_floors(self):
+        num_floors = self.num_floors
+        if num_floors == 1:
+            return [self.apartment_table]
+
+        floor_tables = [{} for _ in range(num_floors)]
+        for apt_type, apt_info in self.apartment_table.items():
+            total_number = apt_info['number']
+            base_number = floor(total_number / (num_floors - 1))
+
+            # Если base_number = 0, но total_number > 0, генерируем сообщение
+            if base_number == 0 and total_number > 0:
+                self.message = f"Ошибка: невозможно распределить {apt_type} (всего {total_number}) на {num_floors} этажей."
+                return None  # Прерываем выполнение
+
+            remaining = total_number
+            for i in range(1, num_floors):  # Со 2-го этажа
+                assigned_number = min(base_number, remaining)
+                if assigned_number > 0:
+                    floor_tables[i][apt_type] = {
+                        'area_range': apt_info['area_range'],
+                        'percent': apt_info['percent'],
+                        'number': assigned_number
+                    }
+                    remaining -= assigned_number
+
+            # Оставшиеся квартиры на первый этаж
+            floor_tables[0][apt_type] = {
+                'area_range': apt_info['area_range'],
+                'percent': apt_info['percent'],
+                'number': remaining
             }
-            print(f"Все этажи {common_apartment_floor_table}")
-            floor = Floor(points=self.points, sections=self.sections,
-                          apartment_table=common_apartment_floor_table,
-                          building_polygon=self.polygon)
+        return floor_tables
 
-            floor.generate_floor_planning()  # Генерируем план этажа
-            for _ in range(self.num_floors - 1):
-                self.floors.append(floor)
-
-            # Генерация последнего этажа
-            last_apartment_floor_table = {
-                k: {
-                    'area_range': v['area_range'],
-                    'percent': v['percent'],
-                    'number': v['number'] - (common_apartment_floor_table[k]['number'] * (self.num_floors - 1))
-                    # Вычисляем количество квартир для последнего этажа
-                } for k, v in self.apartment_table.items()
-            }
-            print(f"Первый этаж {last_apartment_floor_table}")
-            # Создаем последний этаж с корректированным количеством квартир
-            last_floor = Floor(points=self.points, sections=self.sections,
-                               apartment_table=last_apartment_floor_table,
-                               building_polygon=self.polygon)
-            last_floor.generate_floor_planning()  # Генерируем план последнего этажа
-
-            self.floors.insert(0, last_floor)  # Добавляем последний этаж в начало списка
