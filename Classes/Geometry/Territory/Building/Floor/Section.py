@@ -23,7 +23,7 @@ class Section(GeometricFigure):
         self.apartment_table = apartment_table
         self.building_polygon = building_polygon
 
-    def generate_section_planning(self, max_iterations=50, cell_size=1):
+    def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -46,6 +46,7 @@ class Section(GeometricFigure):
             # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells)
+            best_rectangularity = float('inf')
 
             # **Validation**: Validate apartments for free sides
             if not apartments:
@@ -63,14 +64,15 @@ class Section(GeometricFigure):
                     self._process_cells()
                 continue
 
-            # # Update the best plan if current is better
-            total_error = 0
-            if total_error < best_score:
-                best_score = total_error
-                best_plan = apartments
-                self.free_cells = [cell for cell in self.cells if not cell["assigned"]]
-                print(f"Iteration {iteration + 1}: Found a better plan with error {best_score:.2f}%")
+            total_rectangularity_error = sum(self._rectangularity_score(apt.polygon) for apt in apartments)
 
+            # Сравнение с лучшей найденной планировкой
+            if total_rectangularity_error < best_rectangularity:
+                best_rectangularity = total_rectangularity_error
+                best_plan = apartments
+            print(best_rectangularity)
+            if best_rectangularity < 0.01:
+                break
 
             # Early exit if perfect plan is found
             if best_score == 0:
@@ -87,6 +89,20 @@ class Section(GeometricFigure):
         print(f"Section planning completed in {total_time:.2f} seconds.")
 
         return self.apartments
+
+    def _rectangularity_score(self, poly):
+        """
+        Рассчитывает прямоугольность полигона.
+
+        Args:
+            poly (Polygon): Полигон.
+
+        Returns:
+            float: Оценка прямоугольности (чем меньше, тем лучше).
+        """
+        extended_area = poly.envelope.area
+        area = poly.area
+        return abs(extended_area - area) / area
 
     def _reset_cell_assignments(self):
         """Resets the 'assigned' status of all cells in the grid."""
