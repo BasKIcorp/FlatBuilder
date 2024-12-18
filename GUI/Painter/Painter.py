@@ -114,7 +114,6 @@ class Painter(QGraphicsView):
         self.rooms = []
         self.internal_edges = []
         self.floors = []
-        self.internal_edge = None
         self.floor_figures = []
 
         self.preview_rect = None
@@ -270,10 +269,13 @@ class Painter(QGraphicsView):
 
         self.points.sort(key=clockwise_angle)
         if self.polygon is None:
+            print("nifa")
             self.polygon = Outline(self.points)
             self.scene.addItem(self.polygon)
             self.polygons.update({self.polygon: self.points})
         else:
+            print(self.polygon.polygon())
+
             self.polygon.updatePolygon()
             self.polygon.update_all_edge_lengths()
         for handle in self.points:
@@ -308,22 +310,11 @@ class Painter(QGraphicsView):
             for point in points:
                 territory_points.append((int(point.get_position()[0]), int(point.get_position()[1])))
                 building.append((int(point.get_position()[0]), int(point.get_position()[1])))
-                self.scene.removeItem(point)
                 points_for_sections.append((int(point.get_position()[0]), int(point.get_position()[1])))
             buildings.append(building)
         sections = divide_into_sections(points_for_sections)
 
-        for polygon in self.polygons.keys():
-            polygon.delete_edge_lengths()
-
-        popo = []
-        for points in buildings:
-            for inner_points in points:
-                popo.append(inner_points)
-        multi = MultiPoint(popo)
-        points = list(multi.envelope.exterior.coords)
-
-        territory = Territory(points=points, building_points=buildings, sections_coords=sections,
+        territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
 
         self.worker = BuildingGenerator(territory)
@@ -331,50 +322,60 @@ class Painter(QGraphicsView):
         self.worker.finished.connect(self.onApartmentsGenerated)
         self.worker_thread.start()
 
-    def onApartmentsGenerated(self, floors):
+    def onApartmentsGenerated(self, error, floors, messages, output_table):
         # Цвета для разных типов квартир
-        self.floors = floors
-        room_colors = {
-            'wet_area': 'red',
-            'living_room': 'orange',
-            'bedroom': 'green',
-            'hall': 'blue',
-            'kitchen': 'purple',
-            'toilet': 'pink'  # Если вам нужно добавить больше типов
-        }
-        apt_colors = {
-            'studio': '#fa6b6b',
-            '1 room': '#6dd170',
-            '2 room': '#6db8d1',
-            '3 room': '#ed975a',
-            '4 room': '#ba7ed9'
-        }
-        # Добавляем квартиры на сцену
-        floor = floors[0]
-        for section in floor.sections:
-            for apt in section.apartments:
-                poly = apt.polygon
-                x, y = poly.exterior.xy
-                poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
-                polygon = QPolygonF(poly_points)
-                area = calculate_polygon_area(polygon)
-                filled_shape = QGraphicsPolygonItem(polygon)
-                filled_shape.setPen(QPen(Qt.black, 0.1))
-                filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                filled_shape.setToolTip(f"Площадь: {area}м^2")
-                self.scene.addItem(filled_shape)
-                self.floor_figures.append(filled_shape)
-                for room in apt.rooms:
-                    x, y = room.polygon.exterior.xy
+        self.generator_error = error
+        if self.generator_error == "":
+            if messages:
+                self.generator_error = messages[0]
+        if self.generator_error == "":
+            for points in self.all_points:
+                for point in points:
+                    self.scene.removeItem(point)
+            for polygon in self.polygons.keys():
+                print(self.polygon)
+                polygon.delete_edge_lengths()
+            self.floors = floors
+            room_colors = {
+                'wet_area': 'red',
+                'living_room': 'orange',
+                'bedroom': 'green',
+                'hall': 'blue',
+                'kitchen': 'purple',
+                'toilet': 'pink'  # Если вам нужно добавить больше типов
+            }
+            apt_colors = {
+                'studio': '#fa6b6b',
+                '1 room': '#6dd170',
+                '2 room': '#6db8d1',
+                '3 room': '#ed975a',
+                '4 room': '#ba7ed9'
+            }
+            # Добавляем квартиры на сцену
+            floor = floors[0]
+            for section in floor.sections:
+                for apt in section.apartments:
+                    poly = apt.polygon
+                    x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
-                    filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
+                    filled_shape.setPen(QPen(Qt.black, 0.3))
+                    filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
-                    filled_shape.setPen(QPen(Qt.black, 0.05))
-                    self.rooms.append(filled_shape)
-
+                    self.scene.addItem(filled_shape)
+                    self.floor_figures.append(filled_shape)
+                    for room in apt.rooms:
+                        x, y = room.polygon.exterior.xy
+                        poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+                        polygon = QPolygonF(poly_points)
+                        area = calculate_polygon_area(polygon)
+                        filled_shape = QGraphicsPolygonItem(polygon)
+                        filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
+                        filled_shape.setToolTip(f"Площадь: {area}м^2")
+                        filled_shape.setPen(QPen(Qt.black, 0.05))
+                        self.rooms.append(filled_shape)
         self.apartmentsGenerated.emit()
 
     def show_floor(self, floor_num, show_rooms):
@@ -408,7 +409,7 @@ class Painter(QGraphicsView):
                 polygon = QPolygonF(poly_points)
                 area = calculate_polygon_area(polygon)
                 filled_shape = QGraphicsPolygonItem(polygon)
-                filled_shape.setPen(QPen(Qt.black, 0.1))
+                filled_shape.setPen(QPen(Qt.black, 0.3))
                 filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
                 filled_shape.setToolTip(f"Площадь: {area}м^2")
                 self.floor_figures.append(filled_shape)

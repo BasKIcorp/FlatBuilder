@@ -246,7 +246,7 @@ class Territory(GeometricFigure):
             min_area_to_reduce = avg_potential_area - threshold_area
             # Формирование сообщения
             self.messages.append(
-                f"Пожалуйста, уменьшите количество квартир/площадь. Минимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
+                f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
             )
             return False  # Планирование невозможно
 
