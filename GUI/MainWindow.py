@@ -230,19 +230,25 @@ class MainWindow(QMainWindow):
         self.graphics_view.show_floor(self.combo.currentIndex(), self.checkbox.isChecked())
 
     def after_generated(self):
-        self.generate_button.setText("Сгенерировать другой вариант")
-        self.generate_button.setEnabled(True)
-        self.graphics_view.interactive = False
-        self.checkbox.setVisible(True)
-        self.save_button.setVisible(True)
-        self.clear_button.setVisible(True)
-        self.elevator_button.setDisabled(False)
-        self.stairs_button.setDisabled(False)
-        self.combo.setVisible(True)
-        self.combo.clear()
-        self.error_text.setText("")
-        for i in range(1, int(self.floor_edit.text()) + 1):
-            self.combo.addItem(f"Этаж {i}")
+        if self.graphics_view.generator_error != "":
+            self.generate_button.setDisabled(False)
+            self.error_text.setText(self.graphics_view.generator_error)
+        else:
+            self.generate_button.setText("Сгенерировать другой вариант")
+            self.add_point_button.setEnabled(False)
+            self.add_building_button.setEnabled(False)
+            self.generate_button.setEnabled(True)
+            self.graphics_view.interactive = True
+            self.checkbox.setVisible(True)
+            self.save_button.setVisible(True)
+            self.clear_button.setVisible(True)
+            self.elevator_button.setDisabled(False)
+            self.stairs_button.setDisabled(False)
+            self.combo.setVisible(True)
+            self.combo.clear()
+            self.error_text.setText("")
+            for i in range(1, int(self.floor_edit.text()) + 1):
+                self.combo.addItem(f"Этаж {i}")
 
     def generate_clicked(self):
         if not self.graphics_view.polygon:
@@ -294,7 +300,13 @@ class MainWindow(QMainWindow):
                 elif (int(self.percent[0].text()) + int(self.percent[1].text()) + int(self.percent[2].text()) + int(self.percent[3].text()) + int(self.percent[4].text())) != 100:
                     self.error_text.setText("Сумма процентов должна быть равна 100!")
                 else:
+                    if self.generate_button.text() == "Сгенерировать другой вариант":
+                        for room in self.graphics_view.rooms:
+                            self.scene.removeItem(room)
+                        for filled_shape in self.graphics_view.floor_figures:
+                            self.scene.removeItem(filled_shape)
                     self.generate_button.setDisabled(True)
+                    self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")
                     self.graphics_view.fillApartments(apartment_table, int(self.floor_edit.text()))
 
@@ -315,18 +327,28 @@ class MainWindow(QMainWindow):
         self.graphics_view.scene.clear()
         self.graphics_view.polygon = None
         self.graphics_view.interactive = True
+        self.graphics_view.polygons = {}
+        self.graphics_view.all_points = []
         self.graphics_view.points = []
-        self.clear_button.setVisible(False)
-        self.save_button.setVisible(False)
-        self.elevator_button.setDisabled(True)
-        self.stairs_button.setDisabled(True)
-        self.generate_button.setText("Сгенерировать")
-        self.combo.setVisible(False)
+        self.graphics_view.sections = []
+        self.graphics_view.rooms = []
+        self.graphics_view.internal_edges = []
+        self.graphics_view.floors = []
+        self.graphics_view.floor_figures = []
         self.graphics_view.add_point(-10, -10)
         self.graphics_view.add_point(-10, 10)
         self.graphics_view.add_point(10, -10)
         self.graphics_view.add_point(10, 10)
         self.graphics_view.update_shape()
+        self.clear_button.setVisible(False)
+        self.save_button.setVisible(False)
+        self.elevator_button.setDisabled(True)
+        self.stairs_button.setDisabled(True)
+        self.add_point_button.setEnabled(True)
+        self.add_building_button.setEnabled(True)
+        self.checkbox.setVisible(False)
+        self.generate_button.setText("Сгенерировать")
+        self.combo.setVisible(False)
 
     def show_rectangle_dialog(self, mode):
         dialog = RectangleDialog()

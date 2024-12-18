@@ -70,7 +70,7 @@ class Building(GeometricFigure):
 
             # Если base_number = 0, но total_number > 0, генерируем сообщение
             if base_number == 0 and total_number > 0:
-                self.message = f"Ошибка: невозможно распределить {apt_type} (всего {total_number}) на {num_floors} этажей."
+                self.message = f"Ошибка: невозможно распределить {apt_type}\n(всего {total_number}) на {num_floors} этажей."
                 return None  # Прерываем выполнение
 
             remaining = total_number
