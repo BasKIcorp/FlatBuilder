@@ -1,17 +1,11 @@
 from collections import defaultdict
 
 from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem, QGraphicsEllipseItem, QGraphicsLineItem
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF, QLine
 import math
 from threading import Thread
 
-from shapely import MultiPoint
-
-from Classes.Geometry.Territory.Building.Building import Building
-from Classes.Geometry.Territory.Building.Elevator import Elevator
-from Classes.Geometry.Territory.Building.Floor.Floor import Floor
-from Classes.Geometry.Territory.Building.Stair import Stair
 from Classes.Geometry.Territory.Territory import Territory
 from GUI.Painter.RotationHandle import RotationHandle
 from GUI.Painter.ElevatorRect import ElevatorRect
@@ -97,6 +91,13 @@ class Painter(QGraphicsView):
         self.scene = scene
         self.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
         self.setScene(self.scene)
+        self.setSceneRect(-1000, -1000, 2000, 2000)
+        self.preview_rect = None
+        self.rect_width = 0
+        self.rect_height = 0
+        self.setDragMode(QGraphicsView.NoDrag)
+        self.setMouseTracking(True)
+
         self.all_points = []
         self.points = []
         self.radius = 0.5
@@ -106,29 +107,48 @@ class Painter(QGraphicsView):
         self.polygon = None
         self.polygons = {}
         self.interactive = True
-        self.setSceneRect(-1000, -1000, 2000, 2000)
-        self.setDragMode(QGraphicsView.NoDrag)
-        self.setMouseTracking(True)
         self._is_panning = False
         self.sections = []
         self.rooms = []
         self.internal_edges = []
         self.floors = []
         self.floor_figures = []
-
-        self.preview_rect = None
-        self.rect_width = 0
-        self.rect_height = 0
-
+        self.cuts = []
         self._start_pos = QPoint()
         self.stairs = []
         self.elevators = []
-        self.mode = None
-        self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
+        self.preview_point = None
+        self.cutting_mode = False
+        self.cut_first_point = None
+        self.cut_second_point = None
 
+        self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
+    def reset(self):
+        self.all_points = []
+        self.points = []
+        self.radius = 0.5
+        self.point_id_counter = 1
+        self.zoom_factor = 1.15
+        self.default_zoom = 8.0
+        self.polygon = None
+        self.polygons = {}
+        self.interactive = True
+        self._is_panning = False
+        self.sections = []
+        self.rooms = []
+        self.internal_edges = []
+        self.floors = []
+        self.floor_figures = []
+        self.cuts = []
+        self._start_pos = QPoint()
+        self.stairs = []
+        self.elevators = []
         self.preview_point = None
+        self.cutting_mode = False
+        self.cut_first_point = None
+        self.cut_second_point = None
 
     def set_preview_rectangle(self, width, height, mode):
         cursor_pos = QCursor.pos()  # Получаем позицию курсора в глобальных координатах
@@ -206,13 +226,36 @@ class Painter(QGraphicsView):
             pass
 
     def on_selection_changed(self):
-        selected_items = self.scene.selectedItems()  # Get all selected items
-        for child in self.scene.items():
-            if isinstance(child, RotationHandle):
-                self.scene.removeItem(child)
-        for item in selected_items:
+        selected_items = self.scene.selectedItems()
+        if selected_items:
+            item = selected_items[0]
+            if isinstance(item, MovablePoint):
+                if self.cutting_mode:
+                    item.setFlag(QGraphicsEllipseItem.ItemIsMovable, False)
+                    if self.cut_first_point:
+                        self.cut_second_point = item
+                        # Create the cut (line) between the two points
+                        cut = QGraphicsLineItem(QLineF(self.cut_first_point.scenePos(), self.cut_second_point.scenePos()))
+                        cut.setPen(QPen(Qt.black, 0.3))
+                        self.scene.addItem(cut)
+                        self.cuts.append(cut)
+
+                        # Register the cut with both points
+                        self.cut_first_point.add_cut(cut, self.cut_second_point)
+                        self.cut_second_point.add_cut(cut, self.cut_first_point)
+
+                        # Reset for the next cut
+                        self.cut_first_point = None
+                        self.cut_second_point = None
+                        self.cutting_mode = False
+                    else:
+                        self.cut_first_point = item
+                    item.setFlag(QGraphicsEllipseItem.ItemIsMovable, True)
+            for child in self.scene.items():
+                if isinstance(child, RotationHandle):
+                    self.scene.removeItem(child)
             if isinstance(item, ElevatorRect) or isinstance(item, StairsRect):
-                handle = RotationHandle(item)  # Handle the rotation of the selected item
+                handle = RotationHandle(item)
                 item.handle = handle
                 self.scene.addItem(handle)
                 handle.update_position()
@@ -246,6 +289,9 @@ class Painter(QGraphicsView):
         self.point_id_counter += 1
         self.scene.addItem(point)
         self.points.append(point)
+
+    def add_section(self):
+        self.cutting_mode = True
 
     def add_building(self):
         self.all_points.append(self.points)
@@ -300,20 +346,23 @@ class Painter(QGraphicsView):
             pass
 
     def fillApartments(self, apartment_table, num_floors):
-        self.all_points.append(self.points)
-        self.polygons.update({self.polygon: self.points})
-        territory_points = []
+        if self.points:
+            self.all_points.append(self.points)
+            self.polygons.update({self.polygon: self.points})
         points_for_sections = []
-        building = []
         buildings = []
         for points in self.all_points:
+            building = []
             for point in points:
-                territory_points.append((int(point.get_position()[0]), int(point.get_position()[1])))
-                building.append((int(point.get_position()[0]), int(point.get_position()[1])))
                 points_for_sections.append((int(point.get_position()[0]), int(point.get_position()[1])))
+                building.append((int(point.get_position()[0]), int(point.get_position()[1])))
             buildings.append(building)
-        sections = divide_into_sections(points_for_sections)
-
+        sections = None
+        if self.cuts is None:
+            sections = buildings
+        print(buildings)
+        print(apartment_table)
+        # sections = divide_into_sections(points_for_sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
 
@@ -321,6 +370,7 @@ class Painter(QGraphicsView):
         self.worker_thread = Thread(target=self.worker.run)
         self.worker.finished.connect(self.onApartmentsGenerated)
         self.worker_thread.start()
+        self.points = []
 
     def onApartmentsGenerated(self, error, floors, messages, output_table):
         # Цвета для разных типов квартир
@@ -352,6 +402,7 @@ class Painter(QGraphicsView):
                 '4 room': '#ba7ed9'
             }
             # Добавляем квартиры на сцену
+            print(floors)
             floor = floors[0]
             for section in floor.sections:
                 for apt in section.apartments:

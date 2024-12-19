@@ -56,12 +56,15 @@ class MainWindow(QMainWindow):
         self.area_to = []
         self.percent = []
         self.number = []
+        area_from = ["25", "38", "55", "75", "95"]
+        area_to = ["35", "50", "70", "95", "130"]
+        number = ["24", "36", "24", "14", "24"]
         for row in range(5):
             area_from_edit = QLineEdit()
             area_from_edit.setValidator(int_validator)
             area_from_edit.setAlignment(Qt.AlignCenter)
             area_from_edit.setFont(font)
-            area_from_edit.setText("0")
+            area_from_edit.setText(area_from[row])
             self.area_from.append(area_from_edit)
             self.table.setCellWidget(row, 1, area_from_edit)
 
@@ -69,7 +72,7 @@ class MainWindow(QMainWindow):
             area_to_edit.setValidator(int_validator)
             area_to_edit.setAlignment(Qt.AlignCenter)
             area_to_edit.setFont(font)
-            area_to_edit.setText("0")
+            area_to_edit.setText(area_to[row])
             self.area_to.append(area_to_edit)
             self.table.setCellWidget(row, 2, area_to_edit)
 
@@ -77,7 +80,7 @@ class MainWindow(QMainWindow):
             percent_edit.setValidator(int_validator)
             percent_edit.setAlignment(Qt.AlignCenter)
             percent_edit.setFont(font)
-            percent_edit.setText("0")
+            percent_edit.setText("20")
             self.percent.append(percent_edit)
             self.table.setCellWidget(row, 3, percent_edit)
 
@@ -85,7 +88,7 @@ class MainWindow(QMainWindow):
             number_edit.setValidator(int_validator)
             number_edit.setAlignment(Qt.AlignCenter)
             number_edit.setFont(font)
-            number_edit.setText("0")
+            number_edit.setText(number[row])
             self.number.append(number_edit)
             self.table.setCellWidget(row, 4, number_edit)
 
@@ -139,7 +142,7 @@ class MainWindow(QMainWindow):
         self.error_text = QLabel("")
         self.error_text.setAlignment(Qt.AlignCenter)
         self.error_text.setFont(font)
-        self.error_text.setFixedHeight(40)
+        self.error_text.setFixedHeight(60)
 
         font.setPointSize(9)
         self.checkbox = QCheckBox(text="Показать квартиры")
@@ -162,26 +165,29 @@ class MainWindow(QMainWindow):
 
         self.graphics_view.apartmentsGenerated.connect(self.after_generated)
 
-        help_text = QLabel("ЛКМ - Добавить точку или лестницу/лифт, ПКМ - Перемещение, Delete - Удалить выбранную "
-                           "точку. Красное выделение - лифт, Желтое выделение - лестница")
+        help_text = QLabel("ПКМ - Перемещение, Delete - Удалить выбранную точку. Для добавления деформационного шва выберите две точки")
 
         self.elevator_button = QPushButton("Добавить лифт")
         self.elevator_button.clicked.connect(lambda: self.show_rectangle_dialog("elevator"))
-        self.elevator_button.setFixedWidth(200)
+        self.elevator_button.setFixedWidth(180)
         self.elevator_button.setDisabled(True)
 
         self.stairs_button = QPushButton("Добавить лестницу")
         self.stairs_button.clicked.connect(lambda: self.show_rectangle_dialog("stairs"))
-        self.stairs_button.setFixedWidth(200)
+        self.stairs_button.setFixedWidth(180)
         self.stairs_button.setDisabled(True)
 
         self.add_point_button = QPushButton("Добавить точку")
         self.add_point_button.clicked.connect(self.graphics_view.add_preview_point)
-        self.add_point_button.setFixedWidth(200)
+        self.add_point_button.setFixedWidth(180)
 
         self.add_building_button = QPushButton("Добавить здание")
         self.add_building_button.clicked.connect(self.graphics_view.add_building)
-        self.add_building_button.setFixedWidth(200)
+        self.add_building_button.setFixedWidth(180)
+
+        self.add_section_button = QPushButton("Добавить ДШ")
+        self.add_section_button.clicked.connect(self.add_section)
+        self.add_section_button.setFixedWidth(180)
 
         modes_layout = QHBoxLayout()
         modes_layout.setAlignment(Qt.AlignLeft)
@@ -190,6 +196,7 @@ class MainWindow(QMainWindow):
         modes_layout.addWidget(self.stairs_button)
         modes_layout.addWidget(self.add_point_button)
         modes_layout.addWidget(self.add_building_button)
+        modes_layout.addWidget(self.add_section_button)
 
         left_layout.addLayout(modes_layout)
 
@@ -222,11 +229,16 @@ class MainWindow(QMainWindow):
         self.graphics_view.add_point(10, 10)
         self.graphics_view.update_shape()
 
+    def add_section(self):
+        self.graphics_view.add_section()
+
     def index_changed(self, index):
+        print(index)
         self.graphics_view.show_floor(index, self.checkbox.isChecked())
         self.combo.setCurrentIndex(index)
 
     def onStateChanged(self):
+        print(self.combo.currentIndex())
         self.graphics_view.show_floor(self.combo.currentIndex(), self.checkbox.isChecked())
 
     def after_generated(self):
@@ -245,6 +257,7 @@ class MainWindow(QMainWindow):
             self.elevator_button.setDisabled(False)
             self.stairs_button.setDisabled(False)
             self.combo.setVisible(True)
+            self.add_section_button.setDisabled(True)
             self.combo.clear()
             self.error_text.setText("")
             for i in range(1, int(self.floor_edit.text()) + 1):
@@ -325,16 +338,7 @@ class MainWindow(QMainWindow):
 
     def clear_painter(self):
         self.graphics_view.scene.clear()
-        self.graphics_view.polygon = None
-        self.graphics_view.interactive = True
-        self.graphics_view.polygons = {}
-        self.graphics_view.all_points = []
-        self.graphics_view.points = []
-        self.graphics_view.sections = []
-        self.graphics_view.rooms = []
-        self.graphics_view.internal_edges = []
-        self.graphics_view.floors = []
-        self.graphics_view.floor_figures = []
+        self.graphics_view.reset()
         self.graphics_view.add_point(-10, -10)
         self.graphics_view.add_point(-10, 10)
         self.graphics_view.add_point(10, -10)
@@ -346,6 +350,7 @@ class MainWindow(QMainWindow):
         self.stairs_button.setDisabled(True)
         self.add_point_button.setEnabled(True)
         self.add_building_button.setEnabled(True)
+        self.add_section_button.setDisabled(False)
         self.checkbox.setVisible(False)
         self.generate_button.setText("Сгенерировать")
         self.combo.setVisible(False)

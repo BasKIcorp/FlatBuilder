@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QRectF, Qt, QPointF
+from PyQt5.QtCore import QRectF, Qt, QPointF, QLineF
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsItem
 
 
@@ -19,6 +19,12 @@ class MovablePoint(QGraphicsEllipseItem):
         self.preview = preview
         self.parent_polygon = parent_polygon
         self.snap_threshold = 1
+        self.cuts = []
+
+    def __del__(self):
+        for line_item, other_point in self.cuts:
+            other_point.remove_cut(line_item)
+            self.scene().removeItem(line_item)
 
     def paint(self, painter, option, widget=None):
         if self.isSelected():
@@ -44,12 +50,21 @@ class MovablePoint(QGraphicsEllipseItem):
             y = round(value.y() / self.snap_threshold) * self.snap_threshold
             new_pos = QPointF(x, y)
 
+            for line_item, other_point in self.cuts:
+                line_item.setLine(QLineF(new_pos, other_point.scenePos()))
+
             # Обновляем полигон, связанный с точкой
             polygon_item = self.parent_polygon
             polygon_item.updatePolygon()
 
             return new_pos
         return super().itemChange(change, value)
+
+    def add_cut(self, line_item, other_point):
+        self.cuts.append((line_item, other_point))
+
+    def remove_cut(self, line_item):
+        self.cuts = [(line, point) for line, point in self.cuts if line != line_item]
 
     def snap_to_axes(self, pos, polygon):
         # Snap to horizontal or vertical alignment for all points in the polygon
