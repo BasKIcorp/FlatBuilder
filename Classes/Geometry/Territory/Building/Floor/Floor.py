@@ -19,33 +19,32 @@ class Floor(GeometricFigure):
         self.sections = []
         self.building_polygon = building_polygon
 
-    def generate_floor_planning(self, cell_size=1):
+    def generate_floor_planning(self, cell_size=1, is_copy=False):
         """
         Генерирует планировку этажа, распределяя квартиры по секциям.
         """
-        print(f"Количество секций {len(self.sections_list)}")
         self.cells = None
         self.check_and_create_cell_grid(cell_size=cell_size)
-        print(len(self.sections_list))
         if len(self.sections_list) == 1:
             # Если секция одна, таблица остаётся неизменной
             section = Section(points=self.sections_list[0],
                               apartment_table=self.apartment_table,
                               building_polygon=self.building_polygon)
-            section.check_and_create_cell_grid(cell_size=1)
-            section.generate_section_planning(max_iterations=20)
             self.sections.append(section)
+            if not is_copy:
+                section.check_and_create_cell_grid(cell_size=1)
+                section.generate_section_planning(max_iterations=20)
         else:
             # Распределение квартир по секциям
             section_tables = self._distribute_apartment_table_among_sections()
             for i, (points, section_table) in enumerate(zip(self.sections_list, section_tables)):
-                print(f" Секция {section_table}")
                 section = Section(points=points,
                                   apartment_table=section_table,
                                   building_polygon=self.building_polygon)
-                section.check_and_create_cell_grid(cell_size=1)
-                section.generate_section_planning(max_iterations=20)
                 self.sections.append(section)
+                if not is_copy:
+                    section.check_and_create_cell_grid(cell_size=1)
+                    section.generate_section_planning(max_iterations=20)
 
     def _distribute_apartment_table_among_sections(self):
         """

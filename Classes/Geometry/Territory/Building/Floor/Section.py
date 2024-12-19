@@ -7,7 +7,7 @@ from shapely.ops import unary_union
 import random
 from typing import List, Tuple, Dict
 import time
-
+import copy
 
 
 class Section(GeometricFigure):
@@ -23,7 +23,6 @@ class Section(GeometricFigure):
         self.building_polygon = building_polygon
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
-        print(self.apartment_table)
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -50,13 +49,13 @@ class Section(GeometricFigure):
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
 
-            if not self._validate_apartments_free_sides(apartments):
-                # Allocation is invalid, skip to next iteration
-                for apart in apartments:
-                    apart.check_and_create_cell_grid(cell_size=1)
-                    apart._reset_cell_assignments()
-                    self._process_cells()
-                continue
+            # if not self._validate_apartments_free_sides(apartments):
+            #     # Allocation is invalid, skip to next iteration
+            #     for apart in apartments:
+            #         apart.check_and_create_cell_grid(cell_size=1)
+            #         apart._reset_cell_assignments()
+            #         self._process_cells()
+            #     continue
 
             total_rectangularity_error = sum(self._rectangularity_score(apt.polygon) for apt in apartments)
 
@@ -72,6 +71,8 @@ class Section(GeometricFigure):
                 break
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
+        if not self.apartments:
+            print("Не нашел планировку")
         for apt in self.apartments:
             apt.section_polygon = self.polygon
             apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
@@ -262,50 +263,135 @@ class Section(GeometricFigure):
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
         visited_cells = set()
-        if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
-            start_cell = random.choice(self.queue_corners_to_allocate)
-            self.queue_corners_to_allocate.remove(start_cell)  # Удаляем выбранный элемент из списка
+        variants = []
+        if self.queue_corners_to_allocate:
+            for corner in self.queue_corners_to_allocate:
+                temp_apartment_cells = []
+                queue = [corner]
+                while queue and len(temp_apartment_cells) < apt_cell_count:
+                    current_cell = queue.pop(0)
+                    if current_cell['assigned']:
+                        continue
+                    visited_cells.add(current_cell['id'])
+                    temp_apartment_cells.append(current_cell)
+
+                    current_cell['assigned'] = True
+                    remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+
+                    # Получаем не назначенные соседние клетки
+                    neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
+
+                    # Сортируем соседей по убыванию количества их свободных соседей
+                    neighbors_sorted = sorted(
+                        neighbors,
+                        key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+                        reverse=True
+                    )
+
+                    # Добавляем отсортированных соседей в очередь
+                    queue.extend(neighbors_sorted)
+                # Проверка, удалось ли выделить нужное количество клеток
+                if len(temp_apartment_cells) < min_cells:
+                    # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+                    for cell in temp_apartment_cells:
+                        cell['assigned'] = False
+                    continue
+                else:
+                    for cell in temp_apartment_cells:
+                        cell['assigned'] = False
+                    variants.append((temp_apartment_cells, corner))
+
+            best_score = float('inf')
+            best_variant = None
+            corner_to_remove = None
+            for variant in variants:
+                variant_poly = unary_union([cell['polygon'] for cell in variant[0]])
+                score = self._rectangularity_score(variant_poly)
+                if score < best_score:
+                    best_variant = variant[0]
+                    corner_to_remove = variant[1]
+            if best_variant is None:
+                return None
+            for cell in best_variant:
+                cell['assigned'] = True
+            self.queue_corners_to_allocate.remove(corner_to_remove)
+            return best_variant
         elif len(self.initial_corner_cells) > 0:
-            start_cell = random.choice(self.initial_corner_cells)
-            self.initial_corner_cells.remove(start_cell)  # Удаляем выбранный элемент из списка
-        elif len([cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
-            start_cell = random.choice(
-                [cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']])
-        else:
-            return None
-        queue = [start_cell]
-        while queue and len(apartment_cells) < apt_cell_count:
-            current_cell = queue.pop(0)
-            if current_cell['assigned']:
-                continue
+            queue = [random.choice(self.initial_corner_cells)]
+            while queue and len(apartment_cells) < apt_cell_count:
+                current_cell = queue.pop(0)
+                if current_cell['assigned']:
+                    continue
+                visited_cells.add(current_cell['id'])
+                apartment_cells.append(current_cell)
 
-            visited_cells.add(current_cell['id'])
-            apartment_cells.append(current_cell)
+                current_cell['assigned'] = True
+                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
 
-            current_cell['assigned'] = True
-            remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+                # Получаем не назначенные соседние клетки
+                neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
 
-            # Получаем не назначенные соседние клетки
-            neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
+                # Сортируем соседей по убыванию количества их свободных соседей
+                neighbors_sorted = sorted(
+                    neighbors,
+                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+                    reverse=True
+                )
 
-            # Сортируем соседей по убыванию количества их свободных соседей
-            neighbors_sorted = sorted(
-                neighbors,
-                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-                reverse=True
-            )
+                # Добавляем отсортированных соседей в очередь
+                queue.extend(neighbors_sorted)
+            # Проверка, удалось ли выделить нужное количество клеток
+            if len(apartment_cells) < min_cells:
+                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+                for cell in apartment_cells:
+                    cell['assigned'] = False
+                return None
+            return apartment_cells
 
-            # Добавляем отсортированных соседей в очередь
-            queue.extend(neighbors_sorted)
-
-        # Проверка, удалось ли выделить нужное количество клеток
-        if len(apartment_cells) < min_cells:
-            # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
-            for cell in apartment_cells:
-                cell['assigned'] = False
-            return None
-
-        return apartment_cells
+        # if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
+        #     start_cell = random.choice(self.queue_corners_to_allocate)
+        #     self.queue_corners_to_allocate.remove(start_cell)  # Удаляем выбранный элемент из списка
+        # elif len(self.initial_corner_cells) > 0:
+        #     start_cell = random.choice(self.initial_corner_cells)
+        #     self.initial_corner_cells.remove(start_cell)  # Удаляем выбранный элемент из списка
+        # elif len([cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
+        #     start_cell = random.choice(
+        #         [cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']])
+        # else:
+        #     return None
+        #
+        # queue = [start_cell]
+        # while queue and len(apartment_cells) < apt_cell_count:
+        #     current_cell = queue.pop(0)
+        #     if current_cell['assigned']:
+        #         continue
+        #
+        #     visited_cells.add(current_cell['id'])
+        #     apartment_cells.append(current_cell)
+        #
+        #     current_cell['assigned'] = True
+        #
+        #     # Получаем не назначенные соседние клетки
+        #     neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
+        #
+        #     # Сортируем соседей по убыванию количества их свободных соседей
+        #     neighbors_sorted = sorted(
+        #         neighbors,
+        #         key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+        #         reverse=True
+        #     )
+        #
+        #     # Добавляем отсортированных соседей в очередь
+        #     queue.extend(neighbors_sorted)
+        #
+        # # Проверка, удалось ли выделить нужное количество клеток
+        # if len(apartment_cells) < min_cells:
+        #     # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+        #     for cell in apartment_cells:
+        #         cell['assigned'] = False
+        #     return None
+        #
+        # return apartment_cells
 
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""
@@ -377,5 +463,13 @@ class Section(GeometricFigure):
         Удаляет из apartment_table типы квартир, у которых number = 0.
         """
         return {apt_type: data for apt_type, data in apartment_table.items() if data['number'] > 0}
+
+    def copy(self):
+        """Создает копию объекта Section."""
+        return Section(
+            points=self.points[:],  # Копируем список точек
+            apartment_table=copy.deepcopy(self.apartment_table),  # Глубокая копия таблицы квартир
+            building_polygon=self.building_polygon.buffer(0),  # Копия полигона
+        )
 
 
