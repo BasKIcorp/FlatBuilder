@@ -68,9 +68,7 @@ def plot_floor_with_apartments(ax, floor, title):
     # Добавляем контур этажа
     cx, cy = floor.polygon.exterior.xy
     ax.plot(cx, cy, color='black', linewidth=2)
-    for cell in floor.sections[0].temp_assigned:
-        rx, ry = cell['polygon'].exterior.xy
-        ax.plot(rx, ry, color='black', linewidth=0.5)
+
 # Построение графика для первого этажа
 fig, ax = plt.subplots(figsize=(8, 8))
 plot_floor_with_apartments(ax, territory.buildings[0].floors[1], 'Квартиры на первом этаже')

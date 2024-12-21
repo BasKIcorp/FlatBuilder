@@ -21,7 +21,6 @@ class Section(GeometricFigure):
         self.free_cells = []
         self.apartment_table = self._clean_apartment_table(apartment_table)
         self.building_polygon = building_polygon
-        self.temp_assigned = []
 
     def generate_alternative_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -34,7 +33,6 @@ class Section(GeometricFigure):
             self.cells = None
             self.check_and_create_cell_grid(cell_size=1.0)
             self.queue_corners_to_allocate = []
-
 
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
@@ -143,7 +141,7 @@ class Section(GeometricFigure):
             number = apt_info['number']
             minimum = min_cells * number
             while number > 0:
-                apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells, apartments)
+                apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
                 apartment_cells = self.fill_section_perimeter(self.cells, apartment_cells, max_cells, max_cells)
@@ -207,7 +205,7 @@ class Section(GeometricFigure):
 
 
 
-    def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells, apartments):
+    def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells):
         """Allocates cells for a single apartment using BFS to ensure contiguity.
 
         Modification: Adds neighbors to the queue based on the number of their free neighbors.
@@ -230,12 +228,6 @@ class Section(GeometricFigure):
 
                 temp_apartment_cells = []
                 queue = [corner]
-                if apartments:
-                    for apart in apartments:
-                        if apart.polygon.exterior.intersects(corner['polygon'].exterior):
-                            temp_assigned = self.find_and_assign_free_side_cells(apart.polygon, corner, apartments)
-                            self.temp_assigned = temp_assigned
-                            break
                 local_remaining = [cell for cell in remaining_cells]  # локальная копия remaining_cells
                 while queue and len(temp_apartment_cells) < apt_cell_count:
                     current_cell = queue.pop(0)
@@ -265,8 +257,6 @@ class Section(GeometricFigure):
                     for cell in temp_apartment_cells:
                         cell['assigned'] = False
                     # Пробуем следующий угол
-                    for cell in temp_assigned:
-                        cell['assigned'] = False
                     continue
                 else:
                     # Откатываем обратно к исходному состоянию перед сохранением варианта
@@ -276,8 +266,6 @@ class Section(GeometricFigure):
                     variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
                     score = self._rectangularity_score(variant_poly)
                     variants.append((score, temp_apartment_cells, corner))
-                    for cell in temp_assigned:
-                        cell['assigned'] = False
 
             if not variants:
                 return None
@@ -333,100 +321,6 @@ class Section(GeometricFigure):
         else:
             # Если нет ни queue_corners_to_allocate, ни initial_corner_cells
             return None
-
-    def find_and_assign_free_side_cells(self, apartment_polygon, starting_cell, apartments):
-        """
-        Находит внешние стороны квартиры, которые:
-        1. Не пересекаются с одной переданной клеткой.
-        2. Не пересекаются с периметром секции.
-
-        Расширяет valid_cells, добавляя соседей клеток в зависимости от их расположения
-        относительно стороны квартиры.
-
-        Args:
-            apartment_polygon (Polygon): Полигон квартиры.
-            starting_cell (Dict): Начальная клетка.
-            apartments (List[Apartment]): Список всех квартир.
-
-        Returns:
-            List[Dict]: Список клеток, удовлетворяющих условиям.
-        """
-        # Получаем стороны квартиры
-        apartment_sides = [
-            LineString([apartment_polygon.simplify(tolerance=0.01,preserve_topology=True).exterior.coords[i], apartment_polygon.simplify(tolerance=0.01,preserve_topology=True).exterior.coords[i + 1]])
-            for i in range(len(apartment_polygon.simplify(tolerance=0.01,preserve_topology=True).exterior.coords) - 1)
-        ]
-        print(apartment_sides)
-        valid_cells = []
-
-        for side in apartment_sides:
-            # Проверяем, что сторона не пересекается с периметром секции
-            perimeter_intersection = self.polygon.exterior.intersection(side)
-
-            # Если пересечение является линией (LineString), пропускаем эту сторону
-            if isinstance(perimeter_intersection, LineString):
-                continue
-            if starting_cell['polygon'].exterior.intersects(side):
-                continue
-
-            for cell in self.cells:
-                if not cell['assigned'] and side.intersects(cell['polygon'].exterior):
-                    valid_cells.append(cell)
-                    cell['assigned'] = True  # Назначаем клетку
-                    #
-                    # # Проверяем расположение относительно стороны
-                    # cell_center = cell['polygon'].centroid
-                    # side_start, side_end = side.coords[0], side.coords[1]
-                    #
-                    # # Вычисляем вектор стороны и вектор от стороны до клетки
-                    # side_vector = (side_end[0] - side_start[0], side_end[1] - side_start[1])
-                    # to_cell_vector = (cell_center.x - side_start[0], cell_center.y - side_start[1])
-                    #
-                    # # Определяем ориентацию клетки относительно стороны через псевдоскалярное произведение
-                    # orientation = side_vector[0] * to_cell_vector[1] - side_vector[1] * to_cell_vector[0]
-                    #
-                    # # Найти соседей клетки
-                    # neighbors = [neighbor for neighbor in cell['neighbors'] if not neighbor['assigned']]
-                    #
-                    # if orientation > 0:  # Клетка слева от стороны
-                    #     left_neighbors = [
-                    #         neighbor for neighbor in neighbors
-                    #         if neighbor['polygon'].centroid.x < cell_center.x
-                    #     ]
-                    #     valid_cells.extend(left_neighbors[:2])
-                    #     for n in left_neighbors[:2]:
-                    #         n['assigned'] = True
-                    #
-                    # elif orientation < 0:  # Клетка справа от стороны
-                    #     right_neighbors = [
-                    #         neighbor for neighbor in neighbors
-                    #         if neighbor['polygon'].centroid.x > cell_center.x
-                    #     ]
-                    #     valid_cells.extend(right_neighbors[:2])
-                    #     for n in right_neighbors[:2]:
-                    #         n['assigned'] = True
-                    #
-                    # # Если клетка находится выше стороны
-                    # if cell_center.y > max(side_start[1], side_end[1]):
-                    #     top_neighbors = [
-                    #         neighbor for neighbor in neighbors
-                    #         if neighbor['polygon'].centroid.y > cell_center.y
-                    #     ]
-                    #     valid_cells.extend(top_neighbors[:2])
-                    #     for n in top_neighbors[:2]:
-                    #         n['assigned'] = True
-                    #
-                    # # Если клетка находится ниже стороны
-                    # elif cell_center.y < min(side_start[1], side_end[1]):
-                    #     bottom_neighbors = [
-                    #         neighbor for neighbor in neighbors
-                    #         if neighbor['polygon'].centroid.y < cell_center.y
-                    #     ]
-                    #     valid_cells.extend(bottom_neighbors[:2])
-                    #     for n in bottom_neighbors[:2]:
-                    #         n['assigned'] = True
-        print(len(valid_cells))
-        return valid_cells
 
     def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
         """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
@@ -506,6 +400,7 @@ class Section(GeometricFigure):
         min_cells = max(1, int(area_range[0] / cell_area))
         max_cells = int(area_range[1] / cell_area)
         return min_cells, max_cells
+
 
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""
