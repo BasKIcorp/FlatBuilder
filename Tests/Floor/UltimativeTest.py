@@ -74,3 +74,4 @@ fig, ax = plt.subplots(figsize=(8, 8))
 plot_floor_with_apartments(ax, territory.buildings[0].floors[1], 'Квартиры на первом этаже')
 
 plt.show()
+print(territory.generate_output_table())

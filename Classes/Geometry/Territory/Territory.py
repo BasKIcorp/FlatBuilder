@@ -29,8 +29,6 @@ class Territory(GeometricFigure):
         self.buildings = []
         self.messages = []  # Для хранения сообщений об ошибках
         self.sections_coords = sections_coords if sections_coords is not None else building_points
-        self.total_error = None
-        self.output_table = None
 
 
     def generate_building_plannings(self):
@@ -48,12 +46,17 @@ class Territory(GeometricFigure):
                                 num_floors=self.num_floors,
                                 apartment_table=self.apartment_table)
             building.generate_floors()
-            if building is None:
-                if building.message:
-                    self.messages.append(building.message)  # Сохраняем сообщение
-                return None
+            # if building is None:
+            #     if building.message:
+            #         self.messages.append(building.message)  # Сохраняем сообщение
+            #     return None
+            print('d')
 
             self.buildings.append(building)
+            self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
+            self.output_table = self.generate_output_table()
+            print(f"Ошибка {self.output_table}")
+            print(f"таблица выхода {self.output_table}")
             return
         total_assigned_numbers = {apt_type: 0 for apt_type in self.apartment_table.keys()}
 
@@ -73,9 +76,9 @@ class Territory(GeometricFigure):
                 return None
 
             self.buildings.append(building)
-
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
         self.output_table = self.generate_output_table()
+        print(f"Ошибка {self.output_table}")
         print(f"таблица выхода {self.output_table}")
 
     def _distribute_apartment_table(self, building_index, building_area, total_area, total_assigned_numbers):
