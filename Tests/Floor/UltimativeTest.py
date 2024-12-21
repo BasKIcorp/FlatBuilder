@@ -14,13 +14,13 @@ sections_polygons = [
 
 # Параметры
 num_floors = 9
-apartment_table = {
+apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
     '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 36},
     '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
     '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
     '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
-}
+}]
 
 # Определяем цвета для каждого типа квартиры
 apartment_colors = {
