@@ -25,7 +25,7 @@ class Floor(GeometricFigure):
         """
         Генерирует планировку этажа, распределяя квартиры по секциям.
         """
-        print(f"ter {self.apartment_table}")
+        print(f"floor {self.apartment_table}")
         self.cells = None
         self.check_and_create_cell_grid(cell_size=cell_size)
         if len(self.sections_list) == 1:

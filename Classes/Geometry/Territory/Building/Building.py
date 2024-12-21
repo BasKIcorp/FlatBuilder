@@ -42,7 +42,7 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
-        print(f"ter {self.apartment_table}")
+        print(f"build {self.apartment_table}")
         if self.num_floors == 1:
             self._generate_single_floor()
             return

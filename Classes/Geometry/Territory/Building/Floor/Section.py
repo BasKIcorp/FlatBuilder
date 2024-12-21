@@ -1,7 +1,5 @@
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Apartment.Apartment import Apartment
-from Classes.Geometry.Territory.Building.Elevator import Elevator
-from Classes.Geometry.Territory.Building.Stair import Stair
 from shapely.geometry import Polygon, LineString, MultiPolygon
 from shapely.ops import unary_union
 import random
@@ -23,8 +21,11 @@ class Section(GeometricFigure):
         self.apartment_table = self._clean_apartment_table(apartment_table)
         self.building_polygon = building_polygon
         self.single_floor = single_floor
+        self.total_apartment_number = self._calc_total_apartment_number()
 
     def generate_alternative_section_planning(self, max_iterations=30, cell_size=1):
+        if not floor:
+            return
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
@@ -45,6 +46,7 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
+        print(f"floor {self.apartment_table}")
 
 
         # Create the cell grid once
@@ -71,7 +73,11 @@ class Section(GeometricFigure):
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells)
             best_rectangularity = float('inf')
-
+            if not self._validate_apartment_number(apartments):
+                for apart in apartments:
+                    apart._reset_cell_assignments()
+                    self._process_cells()
+                continue  # No apartments allocated in this iteration
             # **Validation**: Validate apartments for free sides
             if not apartments:
                 for apart in apartments:
@@ -204,6 +210,7 @@ class Section(GeometricFigure):
                 apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
                 apartment.cells = apartment_cells
                 apartments.append(apartment)
+                print('here')
                 number -= 1
 
         return apartments
@@ -278,11 +285,8 @@ class Section(GeometricFigure):
                     for cell in temp_apartment_cells:
                         cell['assigned'] = False
                     continue
-
-
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
-
                 variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
                 score = self._rectangularity_score(variant_poly)
                 variants.append((score, temp_apartment_cells, corner))
@@ -303,6 +307,7 @@ class Section(GeometricFigure):
                 cell['assigned'] = True
             self.queue_corners_to_allocate.remove(corner_to_remove)
             return best_variant
+
         elif len(self.initial_corner_cells) > 0:
             start_cell = random.choice(self.initial_corner_cells)
             queue = [start_cell]
@@ -330,6 +335,10 @@ class Section(GeometricFigure):
             return apartment_cells
         else:
             return None
+    def _validate_apartment_number(self, apartments):
+        if len(apartments) != self.total_apartment_number:
+            return False
+        return True
 
     def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
         """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
@@ -481,7 +490,7 @@ class Section(GeometricFigure):
 
         iteration_count = 0  # Счетчик итераций
 
-        while apartment_envelope.area >= max_area and iteration_count < 3:
+        while min_area <= apartment_envelope.area <= max_area and iteration_count < 3:
             # Находим подходящую сторону для удаления
             removable_side = None
             for side in envelope_sides:
@@ -515,7 +524,8 @@ class Section(GeometricFigure):
             ]
 
             iteration_count += 1  # Увеличиваем счетчик итераций
-        if len(apartment_cells) >= min_area:
+
+        if max_area >= len(apartment_cells) >= min_area:
             return apartment_cells
         else:
             for cell in apartment_cells:
@@ -536,5 +546,13 @@ class Section(GeometricFigure):
             apartment_table=copy.deepcopy(self.apartment_table),  # Глубокая копия таблицы квартир
             building_polygon=self.building_polygon.buffer(0),  # Копия полигона
         )
+
+    def _calc_total_apartment_number(self):
+        count = 0
+        for apt_type in self.apartment_table.keys():
+            count += self.apartment_table[apt_type]['number']
+        return count
+
+
 
 

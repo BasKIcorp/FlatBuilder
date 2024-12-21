@@ -13,7 +13,7 @@ sections_polygons = [
 ]
 
 # Параметры
-num_floors = 1
+num_floors = 3
 apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 100, 'number': 5},
     '1 room': {'area_range': (38, 50), 'percent': 0, 'number': 0},
@@ -71,5 +71,5 @@ def plot_floor_with_apartments(ax, floor, title):
 
 # Построение графика для первого этажа
 fig, ax = plt.subplots(figsize=(8, 8))
-plot_floor_with_apartments(ax, territory.buildings[0].floors[0], 'Квартиры на первом этаже')
+plot_floor_with_apartments(ax, territory.buildings[1].floors[1], 'Квартиры на первом этаже')
 plt.show()
