@@ -51,6 +51,7 @@ class Section(GeometricFigure):
                 self.apartments = best_plan
                 for apt in self.apartments:
                     apt.section_polygon = self.polygon
+                    apt.cells = None
                     apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
                     apt._process_cells()
                     apt.generate_apartment_planning()
@@ -102,6 +103,7 @@ class Section(GeometricFigure):
             print("Не нашел планировку")
         for apt in self.apartments:
             apt.section_polygon = self.polygon
+            apt.cells = None
             apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
             apt._process_cells()
             apt.generate_apartment_planning()
@@ -141,7 +143,7 @@ class Section(GeometricFigure):
             number = apt_info['number']
             minimum = min_cells * number
             while number > 0:
-                apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
+                apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells, apartments)
                 if not apartment_cells:
                     break  # No more apartments of this type can be allocated
                 apartment_cells = self.fill_section_perimeter(self.cells, apartment_cells, max_cells, max_cells)
@@ -198,37 +200,33 @@ class Section(GeometricFigure):
                 self._update_cell_properties(apartment_cells)
 
                 apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
+                apartment.cells = apartment_cells
                 apartments.append(apartment)
                 number -= 1
 
         return apartments
 
-
-
-    def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells):
+    def _allocate_apartment_cells(self, remaining_cells, min_cells, max_cells, apartments):
         """Allocates cells for a single apartment using BFS to ensure contiguity.
 
         Modification: Adds neighbors to the queue based on the number of their free neighbors.
         Cells with more free neighbors are prioritized.
         """
-
         apt_cell_count = random.randint(min_cells, int((max_cells - min_cells) * 0.8 + min_cells))
 
-        # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
         visited_cells = set()
         variants = []
+
         if self.queue_corners_to_allocate:
-            # Перебираем все угловые клетки из queue_corners_to_allocate
             original_assigned_state = [(c, c['assigned']) for c in self.cells]
             for corner in self.queue_corners_to_allocate:
-                # Попытка генерации квартиры из этого угла
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
 
                 temp_apartment_cells = []
                 queue = [corner]
-                local_remaining = [cell for cell in remaining_cells]  # локальная копия remaining_cells
+                local_remaining = [cell for cell in remaining_cells]  # Локальная копия remaining_cells
                 while queue and len(temp_apartment_cells) < apt_cell_count:
                     current_cell = queue.pop(0)
                     if current_cell['assigned']:
@@ -251,21 +249,41 @@ class Section(GeometricFigure):
 
                     # Добавляем отсортированных соседей в очередь
                     queue.extend(neighbors_sorted)
-                # Проверка, удалось ли выделить нужное количество клеток
+
                 if len(temp_apartment_cells) < min_cells:
                     # Откат
                     for cell in temp_apartment_cells:
                         cell['assigned'] = False
-                    # Пробуем следующий угол
                     continue
-                else:
-                    # Откатываем обратно к исходному состоянию перед сохранением варианта
-                    for c, was_assigned in original_assigned_state:
-                        c['assigned'] = was_assigned
-                    # Сохраняем вариант (temp_apartment_cells уже в памяти)
-                    variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
-                    score = self._rectangularity_score(variant_poly)
-                    variants.append((score, temp_apartment_cells, corner))
+
+                # Проверяем пересечения с уже сгенерированными квартирами
+                apartments_intersection = []
+                overlapping = False
+                for apartment in apartments:
+                    if any(apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).intersects(cell['polygon']) for cell in temp_apartment_cells):
+                        apartments_intersection.append(apartment)
+                for apartment in apartments_intersection:
+                    free_cells_count = 0
+                    for cell in [cell for cell in
+                                 apartment.cells if cell['polygon'].exterior.intersects(apartment.polygon.exterior)]:
+                        for neighbor in cell['neighbors']:
+                            if not neighbor['assigned'] and neighbor not in apartment.cells:
+                                free_cells_count += 1
+                    if free_cells_count < 5:
+                        overlapping = True
+                        break
+                if overlapping:
+                    for cell in temp_apartment_cells:
+                        cell['assigned'] = False
+                    continue
+
+
+                for c, was_assigned in original_assigned_state:
+                    c['assigned'] = was_assigned
+
+                variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
+                score = self._rectangularity_score(variant_poly)
+                variants.append((score, temp_apartment_cells, corner))
 
             if not variants:
                 return None
@@ -279,16 +297,13 @@ class Section(GeometricFigure):
                     best_variant = cells_list
                     corner_to_remove = corner
 
-            # Применяем лучший вариант
             for cell in best_variant:
                 cell['assigned'] = True
             self.queue_corners_to_allocate.remove(corner_to_remove)
             return best_variant
         elif len(self.initial_corner_cells) > 0:
-            # Если нет queue_corners_to_allocate, но есть initial_corner_cells
             start_cell = random.choice(self.initial_corner_cells)
             queue = [start_cell]
-            local_remaining = [cell for cell in remaining_cells]
             while queue and len(apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
                 if current_cell['assigned']:
@@ -297,29 +312,21 @@ class Section(GeometricFigure):
                 apartment_cells.append(current_cell)
 
                 current_cell['assigned'] = True
-                local_remaining = [cell for cell in local_remaining if not cell['assigned']]
 
-                # Получаем не назначенные соседние клетки
                 neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
-
-                # Сортируем соседей по убыванию количества их свободных соседей
                 neighbors_sorted = sorted(
                     neighbors,
                     key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
                     reverse=True
                 )
-
-                # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
-            # Проверка, удалось ли выделить нужное количество клеток
+
             if len(apartment_cells) < min_cells:
-                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
                 for cell in apartment_cells:
                     cell['assigned'] = False
                 return None
             return apartment_cells
         else:
-            # Если нет ни queue_corners_to_allocate, ни initial_corner_cells
             return None
 
     def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
