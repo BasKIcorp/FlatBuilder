@@ -13,6 +13,7 @@ import copy
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
+                 single_floor: bool,
                  apartments: List['Apartment'] = None,
                  building_polygon: Polygon = None):
         super().__init__(points)
@@ -21,11 +22,13 @@ class Section(GeometricFigure):
         self.free_cells = []
         self.apartment_table = self._clean_apartment_table(apartment_table)
         self.building_polygon = building_polygon
+        self.single_floor = single_floor
 
     def generate_alternative_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
+        print(f"ter {self.apartment_table}")
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
@@ -90,7 +93,6 @@ class Section(GeometricFigure):
             if total_rectangularity_error < best_rectangularity:
                 best_rectangularity = total_rectangularity_error
                 best_plan = apartments
-                print(best_rectangularity)
             if best_rectangularity < 2:
                 break
 
@@ -269,7 +271,7 @@ class Section(GeometricFigure):
                         for neighbor in cell['neighbors']:
                             if not neighbor['assigned'] and neighbor not in apartment.cells:
                                 free_cells_count += 1
-                    if free_cells_count < 5:
+                    if free_cells_count < 6:
                         overlapping = True
                         break
                 if overlapping:

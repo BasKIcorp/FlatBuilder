@@ -12,7 +12,7 @@ class Territory(GeometricFigure):
                  apartment_table: list):
 
         # Очистка apartment_table от типов квартир с number = 0
-        self.apartment_table = self._clean_apartment_table(apartment_table)
+        self.apartment_table = apartment_table
         # Автоматически создаём envelope для территории на основе building_points
         combined_polygons = MultiPolygon([Polygon(points) for points in building_points])
         envelope = combined_polygons.envelope
@@ -29,14 +29,13 @@ class Territory(GeometricFigure):
         self.buildings = []
         self.messages = []  # Для хранения сообщений об ошибках
         self.sections_coords = sections_coords if sections_coords is not None else building_points
-        self.total_error = None
+        self.total_error = []
         self.output_tables = None
 
     def generate_building_plannings(self):
         """
         Генерирует планировки для всех зданий на территории.
         """
-        total_area = sum(Polygon(points).area for points in self.building_points)  # Общая площадь всех зданий
         if not self.validate_initial_planning():
             print(self.messages)
             return None
@@ -59,17 +58,6 @@ class Territory(GeometricFigure):
         print(f"таблица выхода {self.output_tables}")
 
     def calculate_territory_error(self, buildings, apartment_table):
-        """
-        Подсчитывает общую ошибку отклонения площади квартир на уровне всей территории.
-
-        Args:
-            buildings (list): Список зданий, каждое из которых содержит квартиры и их площади.
-            apartment_table (dict): Таблица с ожидаемыми процентами площадей для типов квартир.
-
-        Returns:
-            float: Общая ошибка, равная сумме абсолютных отклонений фактических процентов от заданных.
-        """
-        average_error = []
         for i in range(len(apartment_table)):
             total_allocated_area = 0  # Общая площадь всех квартир
             type_areas = {apt_type: 0 for apt_type in apartment_table[i]}  # Площадь по типам квартир
@@ -94,72 +82,57 @@ class Territory(GeometricFigure):
                 error = abs(expected_percent - actual_percent)  # Абсолютное отклонение
                 errors.append(error)
 
-                # Отладочная информация
-                print(
-                    f"Тип: {apt_type}, Ожидаемый %: {expected_percent:.2f}, Фактический %: {actual_percent:.2f}, Ошибка: {error:.2f}")
-            average_error.append(sum(errors) / len(errors))
-        return sum(average_error) / len(average_error)
+
+        return errors
 
     def generate_output_table(self):
         """
-        Генерирует выходную таблицу с фактическими данными после планирования территории.
+        Генерирует выходную таблицу с фактическими данными после планирования территории,
+        включая среднюю ошибку для каждого здания.
 
         Возвращает:
-            dict: Выходная таблица в формате словаря.
+            List[Dict]: Список выходных таблиц для каждого здания.
         """
-        # Инициализация словаря для фактических значений
-
         output_tables = []
+
         # Обход всех зданий и квартир для подсчета фактических значений
         for i, building in enumerate(self.buildings):
             actual_data = {apt_type: {
-                'area_range': (float('inf'), float('-inf')),  # Минимальная и максимальная площадь
+                'average_area': 0,  # Средняя площадь
                 'percent': 0,  # Фактический процент
                 'number': 0,  # Фактическое количество
                 'error': 0  # Ошибка
-            } for apt_type in self.apartment_table[0].keys()}
+            } for apt_type in self.apartment_table[i].keys()}
 
-            total_allocated_area = 0
+            # Словарь для подсчета общей площади по типам квартир
+            counting_area = {apt_type: 0 for apt_type in self.apartment_table[i].keys()}
+
+            # Подсчет общей площади и количества квартир
             for floor in building.floors:
                 for section in floor.sections:
                     for apartment in section.apartments:
                         apt_type = apartment.type
-                        apt_area = apartment.area
-
-                        # Обновляем минимальную и максимальную площадь
-                        min_area, max_area = actual_data[apt_type]['area_range']
-                        actual_data[apt_type]['area_range'] = (min(min_area, apt_area), max(max_area, apt_area))
+                        counting_area[apt_type] += apartment.area
                         actual_data[apt_type]['number'] += 1  # Считаем количество квартир
-                        actual_data[apt_type]['percent'] += apt_area  # Суммируем площади
-                        total_allocated_area += apt_area
-            # Рассчитываем фактический процент и ошибки
+
+            # Общая площадь всех квартир в здании
+            total_area = sum(counting_area.values())
+
+            # Рассчитываем фактический процент, среднюю площадь и ошибки
             for apt_type, data in actual_data.items():
-                # Финальные значения для процентов
-                data['percent'] = (data['percent'] / total_allocated_area) * 100 if total_allocated_area > 0 else 0
+                if data['number'] > 0:
+                    data['average_area'] = counting_area[apt_type] / data['number']  # Средняя площадь
+                data['percent'] = (counting_area[apt_type] / total_area) * 100 if total_area > 0 else 0
                 expected_percent = self.apartment_table[i][apt_type]['percent']
                 data['error'] = abs(expected_percent - data['percent'])  # Абсолютная ошибка
 
-                # Преобразуем range, если не было квартир
-                if data['area_range'][0] == float('inf'):
-                    data['area_range'] = (0, 0)
+            # Добавляем ключ 'Средняя ошибка' для здания
+            building_error = self.total_error[i]
+            actual_data['average_error'] = building_error
+
             output_tables.append(actual_data)
+
         return output_tables
-
-    def _clean_apartment_table(self, apartment_table: list) -> Dict:
-        """
-        Удаляет из apartment_table типы квартир, у которых number = 0.
-
-        Args:
-            apartment_table (dict): Исходная таблица с типами квартир.
-
-        Returns:
-            dict: Очищенная таблица.
-        """
-        table_to_return = []
-        for table in apartment_table:
-            cleaned_table = {apt_type: data for apt_type, data in table.items() if data['number'] > 0}
-            table_to_return.append(cleaned_table)
-        return table_to_return
 
     def print_messages(self):
         if self.messages:
@@ -179,26 +152,31 @@ class Territory(GeometricFigure):
                                      for apt_info in self.apartment_table[i].values())
             max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
                                      for apt_info in self.apartment_table[i].values())
-
-            # Шаг 2: Расчет площади для аллокации
-            total_building_area = sum(Polygon(points).area for points in self.building_points)
-            allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
-
-            # Шаг 3: Средняя потенциальная площадь
+            total_building_area = Polygon(self.building_points[i]).area
             avg_potential_area = (min_potential_area + max_potential_area) / 2
-
-            # Шаг 4: Проверка условия
             if self.num_floors == 1:
-                threshold_area = 0.7 * total_building_area
+                threshold_area = avg_potential_area
+                print(total_building_area)
+                print(threshold_area)
+                if not threshold_area < total_building_area * 0.7:
+                    min_area_to_reduce = threshold_area - total_building_area * 0.7
+                    self.messages.append(
+                        f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
+                    )
+                    return False  # Планирование невозможно
+                else:
+                    continue
             else:
+                allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
                 threshold_area = 0.7 * allocatable_area + 0.5 * total_building_area  # 50% для первого этажа, 70% для остальных
-            if not avg_potential_area < threshold_area:
-                # Шаг 5: Расчет минимальной площади для уменьшения
-                min_area_to_reduce = avg_potential_area - threshold_area
-                # Формирование сообщения
-                self.messages.append(
-                    f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
-                )
-                return False  # Планирование невозможно
-
-        return True  # Планирование возможно
+                if not avg_potential_area < threshold_area:
+                    # Шаг 5: Расчет минимальной площади для уменьшения
+                    min_area_to_reduce = avg_potential_area - threshold_area
+                    # Формирование сообщения
+                    self.messages.append(
+                        f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
+                    )
+                    return False  # Планирование невозможно
+                else:
+                    continue
+        return True

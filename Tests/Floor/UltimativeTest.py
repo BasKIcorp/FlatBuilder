@@ -5,22 +5,28 @@ from Classes.Geometry.Territory.Territory import Territory
 
 # Исходные данные полигона территории и зданий
 buildings_polygons = [
-    [(0, 0), (26, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(-10, -10), (10, -10), (10, 10), (-10, 10)], [(27, -34), (37, -34), (37, -25), (26, -26)]
 ]
 
 sections_polygons = [
-    [(0, 0), (26, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(-10, -10), (10, -10), (10, 10), (-10, 10)], [(27, -34), (37, -34), (37, -25), (26, -26)]
 ]
 
 # Параметры
-num_floors = 9
+num_floors = 1
 apartment_table = [{
-    'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
-    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 36},
-    '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
-    '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
-}]
+    'studio': {'area_range': (25, 35), 'percent': 100, 'number': 5},
+    '1 room': {'area_range': (38, 50), 'percent': 0, 'number': 0},
+    '2 room': {'area_range': (55, 70), 'percent': 0, 'number': 0},
+    '3 room': {'area_range': (75, 95), 'percent': 0, 'number': 0},
+    '4 room': {'area_range': (95, 130), 'percent': 0, 'number': 0},
+},
+    {'studio': {'area_range': (20, 30), 'percent': 100, 'number': 1},
+     '1 room': {'area_range': (38, 50), 'percent': 0, 'number': 0},
+     '2 room': {'area_range': (55, 70), 'percent': 0, 'number': 0},
+     '3 room': {'area_range': (75, 95), 'percent': 0, 'number': 0},
+     '4 room': {'area_range': (95, 130), 'percent': 0, 'number': 0},
+     }]
 
 # Определяем цвета для каждого типа квартиры
 apartment_colors = {
@@ -34,12 +40,6 @@ apartment_colors = {
 # Создание объекта территории
 territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table)
 territory.generate_building_plannings()
-print(territory.buildings[0].polygon.area)
-print(territory.buildings[0].floors[0].polygon.area)
-print(territory.buildings[0].floors[0].sections[0].polygon.area)
-sum = 0
-for cell in territory.buildings[0].floors[0].sections[0].cells:
-    sum += cell['polygon'].area
 
 def plot_floor_with_apartments(ax, floor, title):
     """Рисует этаж с квартирами, закрашенными по типу, без комнат."""
@@ -71,7 +71,5 @@ def plot_floor_with_apartments(ax, floor, title):
 
 # Построение графика для первого этажа
 fig, ax = plt.subplots(figsize=(8, 8))
-plot_floor_with_apartments(ax, territory.buildings[0].floors[1], 'Квартиры на первом этаже')
-
+plot_floor_with_apartments(ax, territory.buildings[0].floors[0], 'Квартиры на первом этаже')
 plt.show()
-print(territory.generate_output_table())
