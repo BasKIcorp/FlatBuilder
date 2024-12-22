@@ -14,8 +14,10 @@ class BuildingGenerator(QObject):
         try:
             self.territory.generate_building_plannings()
             for building in self.territory.buildings:
+                floors_per_building = []
                 for floor in building.floors:
-                    self.floors.append(floor)
+                    floors_per_building.append(floor)
+                self.floors.append(floors_per_building)
         except Exception:
             self.error = f"Ошибка генерации"
-        self.finished.emit(self.error, self.floors, self.territory.messages, self.territory.output_table)
+        self.finished.emit(self.error, self.floors, self.territory.messages, self.territory.output_tables)

@@ -6,6 +6,9 @@ from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF, QLine
 import math
 from threading import Thread
 
+from shapely import Polygon, LineString
+from shapely.ops import split
+
 from Classes.Geometry.Territory.Territory import Territory
 from GUI.Painter.RotationHandle import RotationHandle
 from GUI.Painter.ElevatorRect import ElevatorRect
@@ -14,6 +17,25 @@ from GUI.Painter.Outline import Outline
 from GUI.Painter.StairsRect import StairsRect
 from GUI.Threads.BuildingGenerator import BuildingGenerator
 
+
+def qpolygonf_to_shapely(qpolygonf):
+    points = [(point.x(), point.y()) for point in qpolygonf]
+    return Polygon(points)
+
+
+def shapely_to_qpolygonf(shapely_polygon):
+    return QPolygonF([QPointF(x, y) for x, y in shapely_polygon.exterior.coords])
+
+
+def clip_polygon(smaller_qpolygonf, larger_qpolygonf):
+    larger_polygon = qpolygonf_to_shapely(larger_qpolygonf)
+    smaller_polygon = qpolygonf_to_shapely(smaller_qpolygonf)
+
+    clipped_polygon = smaller_polygon.intersection(larger_polygon)
+
+    if clipped_polygon.is_empty:
+        return None
+    return shapely_to_qpolygonf(clipped_polygon)
 
 def calculate_polygon_area(polygon):
     n = len(polygon)
@@ -29,57 +51,23 @@ def calculate_polygon_area(polygon):
     return abs(area) / 2
 
 
-def divide_into_sections(points):
-    # Step 1: Create a list of edges and build an adjacency list
-    edges = [(points[i], points[(i + 1) % len(points)]) for i in range(len(points))]
-    adjacency = defaultdict(list)
-    for p1, p2 in edges:
-        adjacency[p1].append(p2)
-        adjacency[p2].append(p1)
+def cut_polygon(polygon, cuts):
+    polygons = [polygon]  # Start with the original polygon
 
-    # Step 2: Helper to traverse and extract a polygon
-    def extract_polygon(start, visited_edges):
-        polygon = []
-        current = start
-        previous = None
+    for cut in cuts:
+        new_polygons = []
+        for poly in polygons:
+            if poly.intersects(cut):
+                # Split the current polygon with the cut line
+                split_result = split(poly, cut)
+                # Add each resulting piece to the new list
+                new_polygons.extend(split_result.geoms)
+            else:
+                # If the polygon is unaffected by the cut, keep it as is
+                new_polygons.append(poly)
+        polygons = new_polygons  # Update polygons for the next cut
 
-        while True:
-            polygon.append(current)
-            neighbors = adjacency[current]
-
-            # Find the next point (exclude the previous one to avoid backtracking)
-            next_point = None
-            for neighbor in neighbors:
-                if (current, neighbor) not in visited_edges and (neighbor, current) not in visited_edges:
-                    next_point = neighbor
-                    break
-
-            if next_point is None:
-                break  # No further point to visit, loop ends
-
-            # Mark edge as visited
-            visited_edges.add((current, next_point))
-            visited_edges.add((next_point, current))
-
-            previous = current
-            current = next_point
-
-            # If we loop back to the start, we close the polygon
-            if current == start:
-                break
-
-        return polygon
-
-    # Step 3: Traverse all points to extract polygons
-    visited_edges = set()
-    polygons = []
-
-    for edge in edges:
-        p1, p2 = edge
-        if edge not in visited_edges and (p2, p1) not in visited_edges:
-            polygon = extract_polygon(p1, visited_edges)
-            if len(polygon) > 2:  # Valid polygon has at least 3 points
-                polygons.append(polygon)
+    # Convert polygons to lists of coordinates
     return polygons
 
 
@@ -121,6 +109,7 @@ class Painter(QGraphicsView):
         self.cutting_mode = False
         self.cut_first_point = None
         self.cut_second_point = None
+        self.output_tables = None
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
@@ -238,7 +227,7 @@ class Painter(QGraphicsView):
                         cut = QGraphicsLineItem(QLineF(self.cut_first_point.scenePos(), self.cut_second_point.scenePos()))
                         cut.setPen(QPen(Qt.black, 0.3))
                         self.scene.addItem(cut)
-                        self.cuts.append(cut)
+                        self.cuts.append([(cut.line().x1(), cut.line().y1()), (cut.line().x2(), cut.line().y2())])
 
                         # Register the cut with both points
                         self.cut_first_point.add_cut(cut, self.cut_second_point)
@@ -315,7 +304,6 @@ class Painter(QGraphicsView):
 
         self.points.sort(key=clockwise_angle)
         if self.polygon is None:
-            print("nifa")
             self.polygon = Outline(self.points)
             self.scene.addItem(self.polygon)
             self.polygons.update({self.polygon: self.points})
@@ -351,18 +339,27 @@ class Painter(QGraphicsView):
             self.polygons.update({self.polygon: self.points})
         points_for_sections = []
         buildings = []
+        sections = []
         for points in self.all_points:
             building = []
             for point in points:
                 points_for_sections.append((int(point.get_position()[0]), int(point.get_position()[1])))
                 building.append((int(point.get_position()[0]), int(point.get_position()[1])))
             buildings.append(building)
-        sections = None
-        if self.cuts is None:
+            if self.cuts:
+                polygon = Polygon(building)
+                cuts = []
+                for cut in self.cuts:
+                    cuts.append(LineString(cut))
+                section_polygons = cut_polygon(polygon, cuts)
+                for section_polygon in section_polygons:
+                    section = []
+                    x, y = section_polygon.exterior.xy
+                    for i in range(len(x)):
+                        section.append((x[i], y[i]))
+                    sections.append(section)
+        if not self.cuts:
             sections = buildings
-        print(buildings)
-        print(apartment_table)
-        # sections = divide_into_sections(points_for_sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
 
@@ -372,9 +369,10 @@ class Painter(QGraphicsView):
         self.worker_thread.start()
         self.points = []
 
-    def onApartmentsGenerated(self, error, floors, messages, output_table):
+    def onApartmentsGenerated(self, error, floors, messages, output_tables):
         # Цвета для разных типов квартир
         self.generator_error = error
+        self.output_tables = output_tables
         if self.generator_error == "":
             if messages:
                 self.generator_error = messages[0]
@@ -402,32 +400,35 @@ class Painter(QGraphicsView):
                 '4 room': '#ba7ed9'
             }
             # Добавляем квартиры на сцену
-            print(floors)
-            floor = floors[0]
-            for section in floor.sections:
-                for apt in section.apartments:
-                    poly = apt.polygon
-                    x, y = poly.exterior.xy
-                    poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
-                    polygon = QPolygonF(poly_points)
-                    area = calculate_polygon_area(polygon)
-                    filled_shape = QGraphicsPolygonItem(polygon)
-                    filled_shape.setPen(QPen(Qt.black, 0.3))
-                    filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                    filled_shape.setToolTip(f"Площадь: {area}м^2")
-                    self.scene.addItem(filled_shape)
-                    self.floor_figures.append(filled_shape)
-                    for room in apt.rooms:
-                        x, y = room.polygon.exterior.xy
+            for i in range(len(floors)):
+                building = floors[i]
+                floor = building[0]
+                for section in floor.sections:
+                    for apt in section.apartments:
+                        poly = apt.polygon
+                        x, y = poly.exterior.xy
                         poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                         polygon = QPolygonF(poly_points)
+                        outer_polygon = list(self.polygons.keys())[i].polygon()
+                        polygon = clip_polygon(polygon, outer_polygon)
                         area = calculate_polygon_area(polygon)
                         filled_shape = QGraphicsPolygonItem(polygon)
-                        filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
+                        filled_shape.setPen(QPen(Qt.black, 0.3))
+                        filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
                         filled_shape.setToolTip(f"Площадь: {area}м^2")
-                        filled_shape.setPen(QPen(Qt.black, 0.05))
-                        self.rooms.append(filled_shape)
-        self.apartmentsGenerated.emit()
+                        self.scene.addItem(filled_shape)
+                        self.floor_figures.append(filled_shape)
+                        for room in apt.rooms:
+                            x, y = room.polygon.exterior.xy
+                            poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+                            polygon = QPolygonF(poly_points)
+                            area = calculate_polygon_area(polygon)
+                            filled_shape = QGraphicsPolygonItem(polygon)
+                            filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
+                            filled_shape.setToolTip(f"Площадь: {area}м^2")
+                            filled_shape.setPen(QPen(Qt.black, 0.05))
+                            self.rooms.append(filled_shape)
+            self.apartmentsGenerated.emit()
 
     def show_floor(self, floor_num, show_rooms):
         room_colors = {
@@ -452,30 +453,33 @@ class Painter(QGraphicsView):
             for room in self.rooms:
                 self.scene.removeItem(room)
         # Добавляем квартиры на сцену
-        for section in self.floors[floor_num].sections:
-            for apt in section.apartments:
-                poly = apt.polygon
-                x, y = poly.exterior.xy
-                poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
-                polygon = QPolygonF(poly_points)
-                area = calculate_polygon_area(polygon)
-                filled_shape = QGraphicsPolygonItem(polygon)
-                filled_shape.setPen(QPen(Qt.black, 0.3))
-                filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                filled_shape.setToolTip(f"Площадь: {area}м^2")
-                self.floor_figures.append(filled_shape)
-                self.scene.addItem(filled_shape)
-                for room in apt.rooms:
-                    x, y = room.polygon.exterior.xy
+        for i in range(len(self.floors)):
+            building = self.floors[i]
+            floor = building[floor_num]
+            for section in floor.sections:
+                for apt in section.apartments:
+                    poly = apt.polygon
+                    x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
+                    filled_shape.setPen(QPen(Qt.black, 0.3))
+                    filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
-                    filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
-                    filled_shape.setPen(QPen(Qt.black, 0.05))
-                    self.rooms.append(filled_shape)
-                    if show_rooms:
-                        self.scene.addItem(filled_shape)
-
-        self.apartmentsGenerated.emit()
+                    self.floor_figures.append(filled_shape)
+                    self.scene.addItem(filled_shape)
+                    for room in apt.rooms:
+                        x, y = room.polygon.exterior.xy
+                        poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+                        polygon = QPolygonF(poly_points)
+                        outer_polygon = list(self.polygons.keys())[i].polygon()
+                        polygon = clip_polygon(polygon, outer_polygon)
+                        area = calculate_polygon_area(polygon)
+                        filled_shape = QGraphicsPolygonItem(polygon)
+                        filled_shape.setToolTip(f"Площадь: {area}м^2")
+                        filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
+                        filled_shape.setPen(QPen(Qt.black, 0.05))
+                        self.rooms.append(filled_shape)
+                        if show_rooms:
+                            self.scene.addItem(filled_shape)

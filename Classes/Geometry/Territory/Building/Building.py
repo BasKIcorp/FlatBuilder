@@ -42,6 +42,7 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
+        print(f"build {self.apartment_table}")
         if self.num_floors == 1:
             self._generate_single_floor()
             return
@@ -60,7 +61,8 @@ class Building(GeometricFigure):
         floor = Floor(points=self.points,
                       sections_list=self.sections,
                       apartment_table=self.apartment_table,
-                      building_polygon=self.polygon)
+                      building_polygon=self.polygon,
+                      single_floor=True)
         floor.generate_floor_planning()
         self.floors.append(floor)
 
@@ -299,7 +301,6 @@ class Building(GeometricFigure):
             new_floor.sections[i].apartments = deepcopy(floor.sections[i].apartments)
 
         return new_floor
-
 
 
 

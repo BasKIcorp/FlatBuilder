@@ -28,3 +28,13 @@ QPushButton:checked {
 }
 QComboBox {
 }
+QCheckBox::indicator {
+        width: 25px;
+        height: 25px;
+        border: 1px solid black;
+        background-color: white;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #326da8;
+}

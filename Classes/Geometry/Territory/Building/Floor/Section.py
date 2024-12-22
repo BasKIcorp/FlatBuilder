@@ -1,7 +1,5 @@
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Apartment.Apartment import Apartment
-from Classes.Geometry.Territory.Building.Elevator import Elevator
-from Classes.Geometry.Territory.Building.Stair import Stair
 from shapely.geometry import Polygon, LineString, MultiPolygon
 from shapely.ops import unary_union
 import random
@@ -13,6 +11,7 @@ import copy
 class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
+                 single_floor: bool,
                  apartments: List['Apartment'] = None,
                  building_polygon: Polygon = None):
         super().__init__(points)
@@ -21,18 +20,8 @@ class Section(GeometricFigure):
         self.free_cells = []
         self.apartment_table = self._clean_apartment_table(apartment_table)
         self.building_polygon = building_polygon
-
-    def generate_alternative_section_planning(self, max_iterations=30, cell_size=1):
-        self.cell_size = cell_size
-        """Generates a floor plan by allocating apartments according to the given apartment table."""
-        self.apartments = []  # Initialize as empty list
-        best_plan = None
-        best_score = float('inf')  # The low3   2er, the better
-        start_time = time.time()
-        for iteration in range(max_iterations):
-            self.cells = None
-            self.check_and_create_cell_grid(cell_size=1.0)
-            self.queue_corners_to_allocate = []
+        self.single_floor = single_floor
+        self.total_apartment_number = self._calc_total_apartment_number()
 
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
@@ -42,6 +31,7 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
+        print(f"section {self.apartment_table}")
 
 
         # Create the cell grid once
@@ -68,13 +58,17 @@ class Section(GeometricFigure):
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells)
             best_rectangularity = float('inf')
-
-            # **Validation**: Validate apartments for free sides
-            if not apartments:
-                for apart in apartments:
-                    apart._reset_cell_assignments()
-                    self._process_cells()
-                continue  # No apartments allocated in this iteration
+            # if not self._validate_apartment_number(apartments):
+            #     for apart in apartments:
+            #         apart._reset_cell_assignments()
+            #         self._process_cells()
+            #     continue  # No apartments allocated in this iteration
+            # # **Validation**: Validate apartments for free sides
+            # if not apartments:
+            #     for apart in apartments:
+            #         apart._reset_cell_assignments()
+            #         self._process_cells()
+            #     continue  # No apartments allocated in this iteration
 
             # if not self._validate_apartments_free_sides(apartments):
             #     # Allocation is invalid, skip to next iteration
@@ -90,7 +84,6 @@ class Section(GeometricFigure):
             if total_rectangularity_error < best_rectangularity:
                 best_rectangularity = total_rectangularity_error
                 best_plan = apartments
-                print(best_rectangularity)
             if best_rectangularity < 2:
                 break
 
@@ -218,9 +211,17 @@ class Section(GeometricFigure):
         visited_cells = set()
         variants = []
 
-        if self.queue_corners_to_allocate:
+        if self.queue_corners_to_allocate or [cell for cell in self.initial_corner_cells if not cell['assigned']]:
             original_assigned_state = [(c, c['assigned']) for c in self.cells]
-            for corner in self.queue_corners_to_allocate:
+            if self.queue_corners_to_allocate:
+                all_corners = self.queue_corners_to_allocate + [cell for cell in self.initial_corner_cells if
+                                                            not cell['assigned']]
+                had_queue = True
+            else:
+                all_corners = [cell for cell in self.initial_corner_cells if
+                                                            not cell['assigned']]
+                had_queue = False
+            for corner in all_corners:
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
 
@@ -269,21 +270,19 @@ class Section(GeometricFigure):
                         for neighbor in cell['neighbors']:
                             if not neighbor['assigned'] and neighbor not in apartment.cells:
                                 free_cells_count += 1
-                    if free_cells_count < 5:
+                    if free_cells_count < 6:
                         overlapping = True
                         break
                 if overlapping:
                     for cell in temp_apartment_cells:
                         cell['assigned'] = False
                     continue
-
-
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
-
                 variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
                 score = self._rectangularity_score(variant_poly)
                 variants.append((score, temp_apartment_cells, corner))
+                print(variants[-1][0], len(variants[-1][1]), variants[-1][2]['id'])
 
             if not variants:
                 return None
@@ -299,10 +298,12 @@ class Section(GeometricFigure):
 
             for cell in best_variant:
                 cell['assigned'] = True
-            self.queue_corners_to_allocate.remove(corner_to_remove)
+            if had_queue and corner in self.queue_corners_to_allocate:
+                self.queue_corners_to_allocate.remove(corner_to_remove)
             return best_variant
+
         elif len(self.initial_corner_cells) > 0:
-            start_cell = random.choice(self.initial_corner_cells)
+            start_cell = random.choice([cell for cell in self.initial_corner_cells if not cell['assigned']])
             queue = [start_cell]
             while queue and len(apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
@@ -328,6 +329,10 @@ class Section(GeometricFigure):
             return apartment_cells
         else:
             return None
+    def _validate_apartment_number(self, apartments):
+        if len(apartments) != self.total_apartment_number:
+            return False
+        return True
 
     def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
         """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
@@ -479,7 +484,7 @@ class Section(GeometricFigure):
 
         iteration_count = 0  # Счетчик итераций
 
-        while apartment_envelope.area >= max_area and iteration_count < 3:
+        while min_area <= apartment_envelope.area <= max_area and iteration_count < 3:
             # Находим подходящую сторону для удаления
             removable_side = None
             for side in envelope_sides:
@@ -513,7 +518,8 @@ class Section(GeometricFigure):
             ]
 
             iteration_count += 1  # Увеличиваем счетчик итераций
-        if len(apartment_cells) >= min_area:
+
+        if max_area >= len(apartment_cells) >= min_area:
             return apartment_cells
         else:
             for cell in apartment_cells:
@@ -534,5 +540,12 @@ class Section(GeometricFigure):
             apartment_table=copy.deepcopy(self.apartment_table),  # Глубокая копия таблицы квартир
             building_polygon=self.building_polygon.buffer(0),  # Копия полигона
         )
+
+    def _calc_total_apartment_number(self):
+        count = 0
+        for apt_type in self.apartment_table.keys():
+            count += self.apartment_table[apt_type]['number']
+        return count
+
 
 
