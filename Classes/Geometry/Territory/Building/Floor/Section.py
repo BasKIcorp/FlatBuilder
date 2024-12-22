@@ -60,7 +60,6 @@ class Section(GeometricFigure):
             best_rectangularity = float('inf')
 
             if not self._validate_apartment_number(apartments):
-                print(len(apartments))
                 for apart in apartments:
                     apart._reset_cell_assignments()
                     self._process_cells()
@@ -73,7 +72,7 @@ class Section(GeometricFigure):
                 continue  # No apartments allocated in this iteration
 
             total_rectangularity_error = sum(self._rectangularity_score(apt.polygon) for apt in apartments)
-
+            print(total_rectangularity_error)
             # Сравнение с лучшей найденной планировкой
             if total_rectangularity_error < best_rectangularity:
                 best_rectangularity = total_rectangularity_error
@@ -123,7 +122,6 @@ class Section(GeometricFigure):
 
     def _allocate_apartments(self, cells):
         """Allocates cells to apartments according to the specified parameters."""
-
         apartments = []
         remaining_cells = [cell for cell in cells if not cell['assigned']]
         self.initial_corner_cells = [cell for cell in cells if cell['is_corner']]

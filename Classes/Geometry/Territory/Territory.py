@@ -117,14 +117,14 @@ class Territory(GeometricFigure):
             # Рассчитываем фактический процент, среднюю площадь и ошибки
             for apt_type, data in actual_data.items():
                 if data['number'] > 0:
-                    data['average_area'] = counting_area[apt_type] / data['number']  if data['number'] > 0 else 0
-                data['percent'] = (counting_area[apt_type] / total_area) * 100 if total_area > 0 else 0
+                    data['average_area'] = round(counting_area[apt_type] / data['number'], 1)  # Средняя площадь
+                data['percent'] = round((counting_area[apt_type] / total_area) * 100, 1) if total_area > 0 else 0
                 expected_percent = self.apartment_table[i][apt_type]['percent']
-                data['error'] = abs(expected_percent - data['percent'])  # Абсолютная ошибка
+                data['error'] = round(abs(expected_percent - data['percent']), 1)  # Абсолютная ошибка
 
             # Добавляем ключ 'Средняя ошибка' для здания
             building_error = self.total_error[i]
-            actual_data['average_error'] = building_error
+            actual_data['average_error'] = round(sum(self.total_error) / len(self.total_error), 1)
 
             output_tables.append(actual_data)
 
