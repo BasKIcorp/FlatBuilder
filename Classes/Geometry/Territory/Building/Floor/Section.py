@@ -23,21 +23,6 @@ class Section(GeometricFigure):
         self.single_floor = single_floor
         self.total_apartment_number = self._calc_total_apartment_number()
 
-    def generate_alternative_section_planning(self, max_iterations=30, cell_size=1):
-        if not floor:
-            return
-        self.cell_size = cell_size
-        """Generates a floor plan by allocating apartments according to the given apartment table."""
-        self.apartments = []  # Initialize as empty list
-        print(f"ter {self.apartment_table}")
-        best_plan = None
-        best_score = float('inf')  # The low3   2er, the better
-        start_time = time.time()
-        for iteration in range(max_iterations):
-            self.cells = None
-            self.check_and_create_cell_grid(cell_size=1.0)
-            self.queue_corners_to_allocate = []
-
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -46,7 +31,7 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The low3   2er, the better
         start_time = time.time()
-        print(f"floor {self.apartment_table}")
+        print(f"section {self.apartment_table}")
 
 
         # Create the cell grid once
@@ -73,17 +58,17 @@ class Section(GeometricFigure):
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells)
             best_rectangularity = float('inf')
-            if not self._validate_apartment_number(apartments):
-                for apart in apartments:
-                    apart._reset_cell_assignments()
-                    self._process_cells()
-                continue  # No apartments allocated in this iteration
-            # **Validation**: Validate apartments for free sides
-            if not apartments:
-                for apart in apartments:
-                    apart._reset_cell_assignments()
-                    self._process_cells()
-                continue  # No apartments allocated in this iteration
+            # if not self._validate_apartment_number(apartments):
+            #     for apart in apartments:
+            #         apart._reset_cell_assignments()
+            #         self._process_cells()
+            #     continue  # No apartments allocated in this iteration
+            # # **Validation**: Validate apartments for free sides
+            # if not apartments:
+            #     for apart in apartments:
+            #         apart._reset_cell_assignments()
+            #         self._process_cells()
+            #     continue  # No apartments allocated in this iteration
 
             # if not self._validate_apartments_free_sides(apartments):
             #     # Allocation is invalid, skip to next iteration
@@ -210,7 +195,6 @@ class Section(GeometricFigure):
                 apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
                 apartment.cells = apartment_cells
                 apartments.append(apartment)
-                print('here')
                 number -= 1
 
         return apartments
@@ -227,9 +211,17 @@ class Section(GeometricFigure):
         visited_cells = set()
         variants = []
 
-        if self.queue_corners_to_allocate:
+        if self.queue_corners_to_allocate or [cell for cell in self.initial_corner_cells if not cell['assigned']]:
             original_assigned_state = [(c, c['assigned']) for c in self.cells]
-            for corner in self.queue_corners_to_allocate:
+            if self.queue_corners_to_allocate:
+                all_corners = self.queue_corners_to_allocate + [cell for cell in self.initial_corner_cells if
+                                                            not cell['assigned']]
+                had_queue = True
+            else:
+                all_corners = [cell for cell in self.initial_corner_cells if
+                                                            not cell['assigned']]
+                had_queue = False
+            for corner in all_corners:
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
 
@@ -290,6 +282,7 @@ class Section(GeometricFigure):
                 variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
                 score = self._rectangularity_score(variant_poly)
                 variants.append((score, temp_apartment_cells, corner))
+                print(variants[-1][0], len(variants[-1][1]), variants[-1][2]['id'])
 
             if not variants:
                 return None
@@ -305,11 +298,12 @@ class Section(GeometricFigure):
 
             for cell in best_variant:
                 cell['assigned'] = True
-            self.queue_corners_to_allocate.remove(corner_to_remove)
+            if had_queue and corner in self.queue_corners_to_allocate:
+                self.queue_corners_to_allocate.remove(corner_to_remove)
             return best_variant
 
         elif len(self.initial_corner_cells) > 0:
-            start_cell = random.choice(self.initial_corner_cells)
+            start_cell = random.choice([cell for cell in self.initial_corner_cells if not cell['assigned']])
             queue = [start_cell]
             while queue and len(apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
