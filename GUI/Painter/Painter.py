@@ -1,8 +1,10 @@
 from collections import defaultdict
 
 from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor
-from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem, QGraphicsEllipseItem, QGraphicsLineItem
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF, QLine
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem, QGraphicsEllipseItem, QGraphicsLineItem, \
+    QGraphicsTextItem, QGraphicsRectItem, QWidget, QHBoxLayout, QLabel, QFrame, QGraphicsItem, QVBoxLayout, QSpacerItem, \
+    QSizePolicy
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF, QLine, QRectF
 import math
 from threading import Thread
 
@@ -37,6 +39,7 @@ def clip_polygon(smaller_qpolygonf, larger_qpolygonf):
         return None
     return shapely_to_qpolygonf(clipped_polygon)
 
+
 def calculate_polygon_area(polygon):
     n = len(polygon)
     if n < 3:
@@ -69,6 +72,101 @@ def cut_polygon(polygon, cuts):
 
     # Convert polygons to lists of coordinates
     return polygons
+
+
+class LegendWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet("background-color: white; border: 1px solid black;")
+
+        # Define colors and labels for the legend
+        self.apt_colors = {
+            'studio': '#fa6b6b',
+            '1 room': '#6dd170',
+            '2 room': '#6db8d1',
+            '3 room': '#ed975a',
+            '4 room': '#ba7ed9'
+        }
+        self.room_colors = {
+            'kitchen': 'red',
+            'bathroom': 'green',
+            'hall': 'blue',
+            'living room': 'orange',
+            'bedroom': 'purple'
+        }
+
+        # Create a vertical layout for the legend
+        self.layout = QVBoxLayout(self)
+
+        self.apt_layout = QHBoxLayout(self)
+        self.room_layout = QHBoxLayout(self)
+
+        for label, color in self.apt_colors.items():
+            legend_item_layout = QHBoxLayout(self)
+
+            color_square = QLabel()
+            color_square.setFixedSize(20, 20)  # Square size
+            color_square.setStyleSheet(f"background-color: {color};")
+
+            text_label = QLabel(label)
+            text_label.setAlignment(Qt.AlignLeft)
+            text_label.setStyleSheet("border: none; padding: 0px;")
+
+            legend_item_layout.addWidget(color_square)
+            legend_item_layout.addWidget(text_label)
+
+            self.apt_layout.addLayout(legend_item_layout)
+
+        for label, color in self.room_colors.items():
+            legend_item_layout = QHBoxLayout(self)
+
+            color_square = QLabel()
+            color_square.setFixedSize(20, 20)
+            color_square.setStyleSheet(f"background-color: {color};")
+
+            text_label = QLabel(label)
+            text_label.setAlignment(Qt.AlignLeft)
+            text_label.setStyleSheet("border: none; padding: 0px;")
+
+            legend_item_layout.addWidget(color_square)
+            legend_item_layout.addWidget(text_label)
+            legend_item_layout.addItem(QSpacerItem(30, 0))
+
+            self.room_layout.addLayout(legend_item_layout)
+
+        # Add both layouts to the main layout
+        self.layout.addLayout(self.apt_layout)
+        self.layout.addLayout(self.room_layout)
+
+        # Set the stretch factor for the layouts
+        self.layout.setStretch(0, 1)  # Give apt_layout normal space
+        self.layout.setStretch(1, 2)  # Give room_layout more space
+
+        self.setLayout(self.layout)
+
+    def boundingRect(self):
+        """Returns the bounding rectangle of the entire legend for proper positioning in the scene."""
+        return QRectF(self.x_start, self.y_start, 100, len(self.legend_items) * self.spacing)
+
+    def paint(self, painter, option, widget=None):
+        """This function is not used for drawing in this case since the items are handled separately."""
+        pass
+
+    def setPos(self, x, y):
+        """Override to move the entire legend together."""
+        dx = x - self.x_start
+        dy = y - self.y_start
+
+        # Update position of the legend's rectangles and text items
+        for idx, rect in enumerate(self.legend_rects):
+            rect.setPos(self.x_start + dx, self.y_start + idx * self.spacing + dy)
+
+        for idx, text in enumerate(self.legend_texts):
+            text.setPos(self.x_start + 20 + dx, self.y_start + idx * self.spacing - 3 + dy)
+
+        # Update the starting position for future translations
+        self.x_start += dx
+        self.y_start += dy
 
 
 class Painter(QGraphicsView):
@@ -113,6 +211,12 @@ class Painter(QGraphicsView):
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
+
+        self.legend_widget = LegendWidget()
+
+        self.legend_widget.setParent(self)  # Make the legend part of the view
+        self.legend_widget.move(0, 25)
+        self.legend_widget.setVisible(False)
 
     def reset(self):
         self.all_points = []
@@ -224,7 +328,8 @@ class Painter(QGraphicsView):
                     if self.cut_first_point:
                         self.cut_second_point = item
                         # Create the cut (line) between the two points
-                        cut = QGraphicsLineItem(QLineF(self.cut_first_point.scenePos(), self.cut_second_point.scenePos()))
+                        cut = QGraphicsLineItem(
+                            QLineF(self.cut_first_point.scenePos(), self.cut_second_point.scenePos()))
                         cut.setPen(QPen(Qt.black, 0.3))
                         self.scene.addItem(cut)
                         self.cuts.append([(cut.line().x1(), cut.line().y1()), (cut.line().x2(), cut.line().y2())])
@@ -385,12 +490,11 @@ class Painter(QGraphicsView):
                 polygon.delete_edge_lengths()
             self.floors = floors
             room_colors = {
-                'wet_area': 'red',
-                'living_room': 'orange',
-                'bedroom': 'green',
+                'kitchen': 'red',
+                'bathroom': 'green',
                 'hall': 'blue',
-                'kitchen': 'purple',
-                'toilet': 'pink'  # Если вам нужно добавить больше типов
+                'living room': 'orange',
+                'bedroom': 'purple'
             }
             apt_colors = {
                 'studio': '#fa6b6b',
@@ -422,6 +526,8 @@ class Painter(QGraphicsView):
                             x, y = room.polygon.exterior.xy
                             poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                             polygon = QPolygonF(poly_points)
+                            outer_polygon = list(self.polygons.keys())[i].polygon()
+                            polygon = clip_polygon(polygon, outer_polygon)
                             area = calculate_polygon_area(polygon)
                             filled_shape = QGraphicsPolygonItem(polygon)
                             filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
@@ -429,15 +535,15 @@ class Painter(QGraphicsView):
                             filled_shape.setPen(QPen(Qt.black, 0.05))
                             self.rooms.append(filled_shape)
             self.apartmentsGenerated.emit()
+            self.legend_widget.setVisible(True)
 
     def show_floor(self, floor_num, show_rooms):
         room_colors = {
-            'wet_area': 'red',
-            'living_room': 'orange',
-            'bedroom': 'green',
+            'kitchen': 'red',
+            'bathroom': 'green',
             'hall': 'blue',
-            'kitchen': 'purple',
-            'toilet': 'pink'  # Если вам нужно добавить больше типов
+            'living room': 'orange',
+            'bedroom': 'purple'
         }
         apt_colors = {
             'studio': '#fa6b6b',
@@ -462,6 +568,8 @@ class Painter(QGraphicsView):
                     x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
+                    outer_polygon = list(self.polygons.keys())[i].polygon()
+                    polygon = clip_polygon(polygon, outer_polygon)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
                     filled_shape.setPen(QPen(Qt.black, 0.3))

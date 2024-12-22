@@ -174,6 +174,12 @@ class MainWindow(QMainWindow):
         self.right_layout.addWidget(self.generate_button)
         self.right_layout.addWidget(self.error_text)
 
+        self.output_label = QLabel("Результирующая таблица")
+        font.setPointSize(9)
+        self.output_label.setFont(font)
+        self.output_label.setVisible(False)
+        self.right_layout.addWidget(self.output_label, alignment=Qt.AlignCenter)
+
         # таблица вывода
         font.setPointSize(10)
         self.output_table = QTableWidget()
@@ -245,6 +251,8 @@ class MainWindow(QMainWindow):
         self.output_table.setFixedSize(505, 255)
 
         self.right_layout.addWidget(self.output_table)
+
+
 
         bottom_buttons = QVBoxLayout()
         bottom_buttons.setAlignment(Qt.AlignBottom)
@@ -431,6 +439,7 @@ class MainWindow(QMainWindow):
                 self.combo.addItem(f"Этаж {i}")
 
             self.output_table.setVisible(True)
+            self.output_label.setVisible(True)
             self.output_tables = self.graphics_view.output_tables
             building_output = self.output_tables[self.building_combo.currentIndex()]
             av_area = [building_output['studio']['average_area'], building_output['1 room']['average_area'],
@@ -551,6 +560,8 @@ class MainWindow(QMainWindow):
         self.checkbox.setVisible(False)
         self.generate_button.setText("Сгенерировать")
         self.combo.setVisible(False)
+        self.output_table.setVisible(False)
+        self.output_label.setVisible(False)
         self.done = False
 
     def show_rectangle_dialog(self, mode):
