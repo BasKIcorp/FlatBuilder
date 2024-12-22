@@ -46,16 +46,12 @@ class Territory(GeometricFigure):
                                 num_floors=self.num_floors,
                                 apartment_table=self.apartment_table[i])
             building.generate_floors()
-            if building is None:
-                if building.message is not None:
-                    self.messages.append(building.message)  # Сохраняем сообщение
-                return None
             self.buildings.append(building)
-
+        self.get_messages()
+        if self.messages:
+            return
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
         self.output_tables = self.generate_output_table()
-        print(f"Ошибка {self.total_error}")
-        print(f"таблица выхода {self.output_tables}")
 
     def calculate_territory_error(self, buildings, apartment_table):
         for i in range(len(apartment_table)):
@@ -134,11 +130,18 @@ class Territory(GeometricFigure):
 
         return output_tables
 
-    def print_messages(self):
-        if self.messages:
-            print("Сообщения об ошибках:")
-            for msg in self.messages:
-                print(f"- {msg}")
+    def get_messages(self):
+        for building in self.buildings:
+            for floor in building.floors:
+                for section in floor.sections:
+                    if section.messages:
+                        for message in section.messages:
+                            self.messages.append(message)
+                            break
+                    for apartment in section.apartments:
+                        if apartment.messages:
+                            for message in apartment.messages:
+                                self.messages.append(message)
 
     def validate_initial_planning(self):
         """

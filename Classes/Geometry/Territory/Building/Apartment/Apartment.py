@@ -32,6 +32,7 @@ class Apartment(GeometricFigure):
         self.windows = []
         self.section_polygon = None
         self.building_polygon = building_polygon
+        self.messages = []
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
@@ -114,6 +115,8 @@ class Apartment(GeometricFigure):
         self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
         if self.rooms:
             self._generate_windows()
+        if not self.rooms:
+            self.messages.append('Не нашел планировку на уровне квартир')
 
     from shapely.geometry import LineString, MultiLineString
 

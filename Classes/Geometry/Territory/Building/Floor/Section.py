@@ -22,6 +22,7 @@ class Section(GeometricFigure):
         self.building_polygon = building_polygon
         self.single_floor = single_floor
         self.total_apartment_number = self._calc_total_apartment_number()
+        self.messages = []
 
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
@@ -86,7 +87,9 @@ class Section(GeometricFigure):
 
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         if not self.apartments:
-            print("Не нашел планировку")
+            self.messages.append('Не нашел планировку на уровне квартир')
+            return
+
         for apt in self.apartments:
             apt.section_polygon = self.polygon
             apt.cells = None
