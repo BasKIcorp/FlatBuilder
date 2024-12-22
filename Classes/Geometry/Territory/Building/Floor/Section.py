@@ -33,7 +33,6 @@ class Section(GeometricFigure):
         start_time = time.time()
         print(f"section {self.apartment_table}")
 
-
         # Create the cell grid once
 
         for iteration in range(max_iterations):
@@ -58,25 +57,19 @@ class Section(GeometricFigure):
             # Allocate apartments using the cell grid
             apartments = self._allocate_apartments(self.cells)
             best_rectangularity = float('inf')
-            # if not self._validate_apartment_number(apartments):
-            #     for apart in apartments:
-            #         apart._reset_cell_assignments()
-            #         self._process_cells()
-            #     continue  # No apartments allocated in this iteration
-            # # **Validation**: Validate apartments for free sides
-            # if not apartments:
-            #     for apart in apartments:
-            #         apart._reset_cell_assignments()
-            #         self._process_cells()
-            #     continue  # No apartments allocated in this iteration
 
-            # if not self._validate_apartments_free_sides(apartments):
-            #     # Allocation is invalid, skip to next iteration
-            #     for apart in apartments:
-            #         apart.check_and_create_cell_grid(cell_size=1)
-            #         apart._reset_cell_assignments()
-            #         self._process_cells()
-            #     continue
+            if not self._validate_apartment_number(apartments):
+                print(len(apartments))
+                for apart in apartments:
+                    apart._reset_cell_assignments()
+                    self._process_cells()
+                continue  # No apartments allocated in this iteration
+            # **Validation**: Validate apartments for free sides
+            if not apartments:
+                for apart in apartments:
+                    apart._reset_cell_assignments()
+                    self._process_cells()
+                continue  # No apartments allocated in this iteration
 
             total_rectangularity_error = sum(self._rectangularity_score(apt.polygon) for apt in apartments)
 
@@ -211,17 +204,9 @@ class Section(GeometricFigure):
         visited_cells = set()
         variants = []
 
-        if self.queue_corners_to_allocate or [cell for cell in self.initial_corner_cells if not cell['assigned']]:
+        if self.queue_corners_to_allocate:
             original_assigned_state = [(c, c['assigned']) for c in self.cells]
-            if self.queue_corners_to_allocate:
-                all_corners = self.queue_corners_to_allocate + [cell for cell in self.initial_corner_cells if
-                                                            not cell['assigned']]
-                had_queue = True
-            else:
-                all_corners = [cell for cell in self.initial_corner_cells if
-                                                            not cell['assigned']]
-                had_queue = False
-            for corner in all_corners:
+            for corner in self.queue_corners_to_allocate:
                 for c, was_assigned in original_assigned_state:
                     c['assigned'] = was_assigned
 
@@ -261,7 +246,8 @@ class Section(GeometricFigure):
                 apartments_intersection = []
                 overlapping = False
                 for apartment in apartments:
-                    if any(apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).intersects(cell['polygon']) for cell in temp_apartment_cells):
+                    if any(apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).intersects(
+                            cell['polygon']) for cell in temp_apartment_cells):
                         apartments_intersection.append(apartment)
                 for apartment in apartments_intersection:
                     free_cells_count = 0
@@ -282,7 +268,6 @@ class Section(GeometricFigure):
                 variant_poly = unary_union([cell['polygon'] for cell in temp_apartment_cells])
                 score = self._rectangularity_score(variant_poly)
                 variants.append((score, temp_apartment_cells, corner))
-                print(variants[-1][0], len(variants[-1][1]), variants[-1][2]['id'])
 
             if not variants:
                 return None
@@ -298,12 +283,11 @@ class Section(GeometricFigure):
 
             for cell in best_variant:
                 cell['assigned'] = True
-            if had_queue and corner in self.queue_corners_to_allocate:
-                self.queue_corners_to_allocate.remove(corner_to_remove)
+            self.queue_corners_to_allocate.remove(corner_to_remove)
             return best_variant
 
         elif len(self.initial_corner_cells) > 0:
-            start_cell = random.choice([cell for cell in self.initial_corner_cells if not cell['assigned']])
+            start_cell = random.choice(self.initial_corner_cells)
             queue = [start_cell]
             while queue and len(apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
@@ -329,6 +313,7 @@ class Section(GeometricFigure):
             return apartment_cells
         else:
             return None
+
     def _validate_apartment_number(self, apartments):
         if len(apartments) != self.total_apartment_number:
             return False
