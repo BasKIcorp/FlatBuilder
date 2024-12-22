@@ -49,7 +49,8 @@ class Building(GeometricFigure):
         # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
         floor_tables = self._initialize_empty_floor_tables()
         floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
-        self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
+        if self.num_floors > 2:
+            self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
         # Шаг 2: Создаем уникальные паттерны этажей
         floor_patterns = self.create_unique_floor_pattern(floor_tables)
         # Шаг 3: Генерируем этажи
@@ -179,15 +180,19 @@ class Building(GeometricFigure):
             if total_number * mean_area <= 0.15 * total_area:
                 floor_tables[0][apt_type]['number'] += total_number
                 continue
-
-            base_number = total_number // (self.num_floors - 1)
+            if self.num_floors > 2:
+                base_number = total_number // (self.num_floors - 1)
+            else:
+                base_number = total_number // self.num_floors
             remaining_number = total_number
 
             for floor_index in range(1, self.num_floors):
                 floor_tables[floor_index][apt_type]['number'] += base_number
                 remaining_number -= base_number
-
             if remaining_number * mean_area <= 0.15 * total_area:
+                floor_tables[0][apt_type]['number'] += remaining_number
+                remaining_number = 0
+            if self.num_floors == 2:
                 floor_tables[0][apt_type]['number'] += remaining_number
                 remaining_number = 0
 
