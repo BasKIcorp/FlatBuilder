@@ -37,7 +37,7 @@ class Floor(GeometricFigure):
             self.sections.append(section)
             if not is_copy:
                 section.check_and_create_cell_grid(cell_size=1, polygon_to_check=section.polygon)
-                section.generate_section_planning(max_iterations=20)
+                section.generate_section_planning(max_iterations=50)
         else:
             # Распределение квартир по секциям
             section_tables = self._distribute_apartment_table_among_sections()

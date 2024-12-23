@@ -9,7 +9,7 @@ from Classes.Geometry.Territory.Building.Apartment.Window import Window
 from typing import List, Tuple
 import random
 import time
-from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 from shapely.ops import unary_union
 import math
 
@@ -213,6 +213,9 @@ class Apartment(GeometricFigure):
         room_cell_count = random.randint(min_cells, max_cells)
         if len([c for c in self.cells if c['assigned']]) > 0:
             start_cell = self._get_next_start_cell(room_type)
+            if not start_cell:
+                # Если стартовая ячейка не найдена, выходим из текущей итерации
+                return []
         elif self.type != 'studio':
             return_cells = []
             return_cells.extend([cell for cell in self.starting_corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
@@ -270,7 +273,6 @@ class Apartment(GeometricFigure):
                 max_cells = int((self.polygon.area - allocated_area) / 2)
                 return min_cells, max_cells
 
-
     def _get_next_start_cell(self, room_type):
         corner_cells = []
         for cell in [cell for cell in self.cells if cell['assigned'] and cell['on_perimeter']]:
@@ -282,27 +284,36 @@ class Apartment(GeometricFigure):
                     corner_cells.append(cell_for_new_corner)
 
         if room_type in ['living_room', 'bedroom']:
-            return_cells = []
-            return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
-            if len(return_cells) > 0:
+            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
+            if return_cells:
                 return random.choice(return_cells)
 
         elif room_type == 'kitchen':
-            return_cells = []
-            return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
-            if len(return_cells) > 0:
+            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
+            if return_cells:
                 return random.choice(return_cells)
-            else:
+            elif corner_cells:
                 return random.choice(corner_cells)
+
+        # Если corner_cells пуст, используем любые свободные клетки на периметре
         if not corner_cells:
-            return random.choice([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']])
-        return random.choice(corner_cells)
+            available_cells = [cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']]
+            if available_cells:
+                return random.choice(available_cells)
+
+        # Если ничего не найдено, возвращаем None
+        return None
 
     def aspect_ratio_ok(self, cells, max_aspect_ratio=1.5):
         # Проверка соотношения сторон комнаты
         polys = [c['polygon'] for c in cells]
         union_poly = unary_union(polys)
         bbox = union_poly.envelope
+
+        # Если bbox - это точка, соотношение сторон не имеет смысла
+        if isinstance(bbox, Point):
+            return False, 0  # Соотношение невозможно вычислить
+
         coords = list(bbox.exterior.coords)
         side_lengths = []
         for i in range(4):
