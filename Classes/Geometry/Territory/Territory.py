@@ -171,7 +171,7 @@ class Territory(GeometricFigure):
                     continue
             else:
                 allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
-                threshold_area = 0.7 * allocatable_area + 0.5 * total_building_area  # 50% для первого этажа, 70% для остальных
+                threshold_area = 0.65 * allocatable_area
                 if not avg_potential_area < threshold_area:
                     # Шаг 5: Расчет минимальной площади для уменьшения
                     min_area_to_reduce = avg_potential_area - threshold_area

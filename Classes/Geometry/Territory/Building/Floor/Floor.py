@@ -32,8 +32,7 @@ class Floor(GeometricFigure):
             # Если секция одна, таблица остаётся неизменной
             section = Section(points=self.sections_list[0],
                               apartment_table=self.apartment_table,
-                              building_polygon=self.building_polygon,
-                              single_floor=self.single_floor)
+                              building_polygon=self.building_polygon)
             self.sections.append(section)
             if not is_copy:
                 section.check_and_create_cell_grid(cell_size=1, polygon_to_check=section.polygon)

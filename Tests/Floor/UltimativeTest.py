@@ -3,22 +3,29 @@ from shapely.geometry import Polygon
 
 from Classes.Geometry.Territory.Territory import Territory
 
-buildings_polygons = [
-    [(0, 0), (26, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
-]
 
-sections_polygons = [
-    [(0, 0), (26, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+buildings_polygons = [
+    [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
 ]
+sections_polygons = [
+    [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
+]
+# buildings_polygons = [
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]
+#
+# sections_polygons = [
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]
 
 # Параметры
 num_floors = 9
 apartment_table = [{
-    'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
+    'studio': {'area_range': (25, 35), 'percent': 100, 'number': 20},
     '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 18},
     '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
     '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
+    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 28},
 }]
 # Исходные данные полигона территории и зданий
 
@@ -40,7 +47,6 @@ def plot_section(ax, section, title):
     """Рисует секцию с квартирами, закрашенными по типу, и комнатами внутри."""
     ax.set_title(title)
     ax.set_aspect('equal', adjustable='box')
-
     apartment_number = 1  # Начальный номер квартиры
     for apartment in section.apartments:
         # Контур квартиры
@@ -68,6 +74,7 @@ def plot_section(ax, section, title):
     # Добавляем контур секции
     cx, cy = section.polygon.exterior.xy
     ax.plot(cx, cy, color='black', linewidth=2)  # Контур секции
+
 
 # Построение графиков для каждой секции
 figure_list = []
