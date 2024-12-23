@@ -116,6 +116,7 @@ class AptLegendWidget(QWidget):
         # Set the main layout
         self.setLayout(self.apt_layout)
 
+
 class RoomLegendWidget(QWidget):
     def __init__(self):
         super().__init__()
@@ -140,7 +141,6 @@ class RoomLegendWidget(QWidget):
 
         # Set the main layout
         self.setLayout(self.room_layout)
-
 
 
 class Painter(QGraphicsView):
@@ -183,6 +183,7 @@ class Painter(QGraphicsView):
         self.cut_second_point = None
         self.output_tables = None
         self.generator_error = None
+        self.window_items = []
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
@@ -198,6 +199,23 @@ class Painter(QGraphicsView):
         self.room_legend_widget.setParent(self)  # Make the legend part of the view
         self.room_legend_widget.move(0, 55)
         self.room_legend_widget.setVisible(False)
+
+    def set_preview_rectangle(self, width, height, mode):
+        cursor_pos = QCursor.pos()  # Получаем позицию курсора в глобальных координатах
+        scene_pos = self.mapToScene(self.mapFromGlobal(cursor_pos))  # Преобразуем в координаты сцены
+
+        if self.preview_point:
+            self.scene.removeItem(self.preview_point)
+        if self.preview_rect:
+            self.scene.removeItem(self.preview_rect)
+
+        self.rect_width = width
+        self.rect_height = height
+
+        self.preview_rect = self.scene.addRect(0, 0, width, height)
+        self.preview_rect.setPos(scene_pos - QPointF(self.rect_width / 2, self.rect_height / 2))
+        self.mode = mode
+        self.preview_rect.setPen(QPen(Qt.DashLine))
 
     def reset(self):
         self.all_points = []
@@ -224,6 +242,7 @@ class Painter(QGraphicsView):
         self.cut_first_point = None
         self.cut_second_point = None
         self.generator_error = None
+        self.window_items = []
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -501,6 +520,9 @@ class Painter(QGraphicsView):
                         self.rooms.append(filled_shape)
                         if show_rooms:
                             self.scene.addItem(filled_shape)
+                        for item in self.window_items:
+                            self.scene.removeItem(item)
+                        self.window_items.clear()
                         for window in apt.windows:
                             window_linestring = window.line
                             x1, y1 = window_linestring.coords[0]
@@ -510,6 +532,4 @@ class Painter(QGraphicsView):
                             gray_line.setPen(QPen(Qt.lightGray, 0.3))
                             self.scene.addItem(gray_line)
 
-
-
-
+                            self.window_items.append(gray_line)
