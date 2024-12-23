@@ -79,7 +79,7 @@ class Section(GeometricFigure):
                 best_plan = apartments_candidate
 
             # Если достигли "достаточно хорошего" результата
-            if best_rectangularity_score < 1.5:
+            if best_rectangularity_score < 0.7:
                 break
 
         # Сохраняем лучший результат
@@ -214,7 +214,7 @@ class Section(GeometricFigure):
                 new_sorted_types = sorted(apartment_table_copy.keys())
                 new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
                 self.agent.store_transition(
-                    reward=-1.0,  # карательный штраф
+                    reward=-2,  # карательный штраф
                     new_state=new_state_tuple,
                     done=False
                 )
@@ -270,6 +270,26 @@ class Section(GeometricFigure):
             candidate_cells = self._bfs_allocate_cells(corner_cell, apt_cell_count, remaining_cells)
             if not candidate_cells or len(candidate_cells) < min_cells:
                 # Откат
+                for cell in candidate_cells:
+                    cell['assigned'] = False
+                continue
+            apartments_intersection = []
+            overlapping = False
+            for apartment in apartments:
+                if any(apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).intersects(cell['polygon'])
+                       for cell in candidate_cells):
+                    apartments_intersection.append(apartment)
+            for apartment in apartments_intersection:
+                free_cells_count = 0
+                for cell in [cell for cell in
+                             apartment.cells if cell['polygon'].exterior.intersects(apartment.polygon.exterior)]:
+                    for neighbor in cell['neighbors']:
+                        if not neighbor['assigned'] and neighbor not in apartment.cells:
+                            free_cells_count += 1
+                if free_cells_count < 6:
+                    overlapping = True
+                    break
+            if overlapping:
                 for cell in candidate_cells:
                     cell['assigned'] = False
                 continue
