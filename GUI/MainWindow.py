@@ -418,6 +418,7 @@ class MainWindow(QMainWindow):
     def after_generated(self):
         if self.graphics_view.generator_error != "":
             self.generate_button.setDisabled(False)
+            self.graphics_view.interactive = True
             self.error_text.setText(self.graphics_view.generator_error)
         else:
             self.done = True

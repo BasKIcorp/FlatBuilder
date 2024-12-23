@@ -19,6 +19,21 @@ from GUI.Painter.Outline import Outline
 from GUI.Painter.StairsRect import StairsRect
 from GUI.Threads.BuildingGenerator import BuildingGenerator
 
+apt_colors = {
+    'studio': '#fa6b6b',
+    '1 room': '#6dd170',
+    '2 room': '#6db8d1',
+    '3 room': '#ed975a',
+    '4 room': '#ba7ed9'
+}
+room_colors = {
+    'kitchen': '#FF9999',
+    'bathroom': '#99FF99',
+    'hall': '#9999FF',
+    'living room': '#FFCC99',
+    'bedroom': '#CC99FF',
+}
+
 
 def qpolygonf_to_shapely(qpolygonf):
     points = [(point.x(), point.y()) for point in qpolygonf]
@@ -74,51 +89,16 @@ def cut_polygon(polygon, cuts):
     return polygons
 
 
-class LegendWidget(QWidget):
+class AptLegendWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setStyleSheet("background-color: white; border: 1px solid black;")
 
-        # Define colors and labels for the legend
-        self.apt_colors = {
-            'studio': '#fa6b6b',
-            '1 room': '#6dd170',
-            '2 room': '#6db8d1',
-            '3 room': '#ed975a',
-            '4 room': '#ba7ed9'
-        }
-        self.room_colors = {
-            'kitchen': 'red',
-            'bathroom': 'green',
-            'hall': 'blue',
-            'living room': 'orange',
-            'bedroom': 'purple'
-        }
+        self.apt_layout = QHBoxLayout(self)  # Stack apartment items vertically
 
-        # Create a vertical layout for the legend
-        self.layout = QVBoxLayout(self)
-
-        self.apt_layout = QHBoxLayout(self)
-        self.room_layout = QHBoxLayout(self)
-
-        for label, color in self.apt_colors.items():
-            legend_item_layout = QHBoxLayout(self)
-
-            color_square = QLabel()
-            color_square.setFixedSize(20, 20)  # Square size
-            color_square.setStyleSheet(f"background-color: {color};")
-
-            text_label = QLabel(label)
-            text_label.setAlignment(Qt.AlignLeft)
-            text_label.setStyleSheet("border: none; padding: 0px;")
-
-            legend_item_layout.addWidget(color_square)
-            legend_item_layout.addWidget(text_label)
-
-            self.apt_layout.addLayout(legend_item_layout)
-
-        for label, color in self.room_colors.items():
-            legend_item_layout = QHBoxLayout(self)
+        # Populate apartment colors
+        for label, color in apt_colors.items():
+            legend_item_layout = QHBoxLayout()
 
             color_square = QLabel()
             color_square.setFixedSize(20, 20)
@@ -130,43 +110,37 @@ class LegendWidget(QWidget):
 
             legend_item_layout.addWidget(color_square)
             legend_item_layout.addWidget(text_label)
-            legend_item_layout.addItem(QSpacerItem(30, 0))
+
+            self.apt_layout.addLayout(legend_item_layout)
+
+        # Set the main layout
+        self.setLayout(self.apt_layout)
+
+class RoomLegendWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setStyleSheet("background-color: white; border: 1px solid black;")
+        self.room_layout = QHBoxLayout(self)  # Stack room items vertically
+
+        for label, color in room_colors.items():
+            legend_item_layout = QHBoxLayout()
+
+            color_square = QLabel()
+            color_square.setFixedSize(20, 20)
+            color_square.setStyleSheet(f"background-color: {color};")
+
+            text_label = QLabel(label)
+            text_label.setAlignment(Qt.AlignLeft)
+            text_label.setStyleSheet("border: none; padding: 0px;")
+
+            legend_item_layout.addWidget(color_square)
+            legend_item_layout.addWidget(text_label)
 
             self.room_layout.addLayout(legend_item_layout)
 
-        # Add both layouts to the main layout
-        self.layout.addLayout(self.apt_layout)
-        self.layout.addLayout(self.room_layout)
+        # Set the main layout
+        self.setLayout(self.room_layout)
 
-        # Set the stretch factor for the layouts
-        self.layout.setStretch(0, 1)  # Give apt_layout normal space
-        self.layout.setStretch(1, 2)  # Give room_layout more space
-
-        self.setLayout(self.layout)
-
-    def boundingRect(self):
-        """Returns the bounding rectangle of the entire legend for proper positioning in the scene."""
-        return QRectF(self.x_start, self.y_start, 100, len(self.legend_items) * self.spacing)
-
-    def paint(self, painter, option, widget=None):
-        """This function is not used for drawing in this case since the items are handled separately."""
-        pass
-
-    def setPos(self, x, y):
-        """Override to move the entire legend together."""
-        dx = x - self.x_start
-        dy = y - self.y_start
-
-        # Update position of the legend's rectangles and text items
-        for idx, rect in enumerate(self.legend_rects):
-            rect.setPos(self.x_start + dx, self.y_start + idx * self.spacing + dy)
-
-        for idx, text in enumerate(self.legend_texts):
-            text.setPos(self.x_start + 20 + dx, self.y_start + idx * self.spacing - 3 + dy)
-
-        # Update the starting position for future translations
-        self.x_start += dx
-        self.y_start += dy
 
 
 class Painter(QGraphicsView):
@@ -208,15 +182,22 @@ class Painter(QGraphicsView):
         self.cut_first_point = None
         self.cut_second_point = None
         self.output_tables = None
+        self.generator_error = None
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
-        self.legend_widget = LegendWidget()
+        self.apt_legend_widget = AptLegendWidget()
 
-        self.legend_widget.setParent(self)  # Make the legend part of the view
-        self.legend_widget.move(0, 25)
-        self.legend_widget.setVisible(False)
+        self.apt_legend_widget.setParent(self)  # Make the legend part of the view
+        self.apt_legend_widget.move(0, 25)
+        self.apt_legend_widget.setVisible(False)
+
+        self.room_legend_widget = RoomLegendWidget()
+
+        self.room_legend_widget.setParent(self)  # Make the legend part of the view
+        self.room_legend_widget.move(0, 55)
+        self.room_legend_widget.setVisible(False)
 
     def reset(self):
         self.all_points = []
@@ -242,23 +223,7 @@ class Painter(QGraphicsView):
         self.cutting_mode = False
         self.cut_first_point = None
         self.cut_second_point = None
-
-    def set_preview_rectangle(self, width, height, mode):
-        cursor_pos = QCursor.pos()  # Получаем позицию курсора в глобальных координатах
-        scene_pos = self.mapToScene(self.mapFromGlobal(cursor_pos))  # Преобразуем в координаты сцены
-
-        if self.preview_point:
-            self.scene.removeItem(self.preview_point)
-        if self.preview_rect:
-            self.scene.removeItem(self.preview_rect)
-
-        self.rect_width = width
-        self.rect_height = height
-
-        self.preview_rect = self.scene.addRect(0, 0, width, height)
-        self.preview_rect.setPos(scene_pos - QPointF(self.rect_width / 2, self.rect_height / 2))
-        self.mode = mode
-        self.preview_rect.setPen(QPen(Qt.DashLine))  # Dashed line for preview
+        self.generator_error = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -467,15 +432,13 @@ class Painter(QGraphicsView):
             sections = buildings
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
-
-        self.worker = BuildingGenerator(territory)
-        self.worker_thread = Thread(target=self.worker.run)
-        self.worker.finished.connect(self.onApartmentsGenerated)
-        self.worker_thread.start()
+        worker = BuildingGenerator(territory)
+        worker_thread = Thread(target=worker.run)
+        worker.finished.connect(self.onApartmentsGenerated)
+        worker_thread.start()
         self.points = []
 
     def onApartmentsGenerated(self, error, floors, messages, output_tables):
-        # Цвета для разных типов квартир
         self.generator_error = error
         self.output_tables = output_tables
         if self.generator_error == "":
@@ -489,69 +452,11 @@ class Painter(QGraphicsView):
                 print(self.polygon)
                 polygon.delete_edge_lengths()
             self.floors = floors
-            room_colors = {
-                'kitchen': 'red',
-                'bathroom': 'green',
-                'hall': 'blue',
-                'living room': 'orange',
-                'bedroom': 'purple'
-            }
-            apt_colors = {
-                'studio': '#fa6b6b',
-                '1 room': '#6dd170',
-                '2 room': '#6db8d1',
-                '3 room': '#ed975a',
-                '4 room': '#ba7ed9'
-            }
-            # Добавляем квартиры на сцену
-            for i in range(len(floors)):
-                building = floors[i]
-                floor = building[0]
-                for section in floor.sections:
-                    for apt in section.apartments:
-                        poly = apt.polygon
-                        x, y = poly.exterior.xy
-                        poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
-                        polygon = QPolygonF(poly_points)
-                        outer_polygon = list(self.polygons.keys())[i].polygon()
-                        polygon = clip_polygon(polygon, outer_polygon)
-                        area = calculate_polygon_area(polygon)
-                        filled_shape = QGraphicsPolygonItem(polygon)
-                        filled_shape.setPen(QPen(Qt.black, 0.3))
-                        filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                        filled_shape.setToolTip(f"Площадь: {area}м^2")
-                        self.scene.addItem(filled_shape)
-                        self.floor_figures.append(filled_shape)
-                        for room in apt.rooms:
-                            x, y = room.polygon.exterior.xy
-                            poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
-                            polygon = QPolygonF(poly_points)
-                            outer_polygon = list(self.polygons.keys())[i].polygon()
-                            polygon = clip_polygon(polygon, outer_polygon)
-                            area = calculate_polygon_area(polygon)
-                            filled_shape = QGraphicsPolygonItem(polygon)
-                            filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
-                            filled_shape.setToolTip(f"Площадь: {area}м^2")
-                            filled_shape.setPen(QPen(Qt.black, 0.05))
-                            self.rooms.append(filled_shape)
-            self.apartmentsGenerated.emit()
-            self.legend_widget.setVisible(True)
+            self.show_floor(0, False)
+            self.apt_legend_widget.setVisible(True)
+        self.apartmentsGenerated.emit()
 
     def show_floor(self, floor_num, show_rooms):
-        room_colors = {
-            'kitchen': 'red',
-            'bathroom': 'green',
-            'hall': 'blue',
-            'living room': 'orange',
-            'bedroom': 'purple'
-        }
-        apt_colors = {
-            'studio': '#fa6b6b',
-            '1 room': '#6dd170',
-            '2 room': '#6db8d1',
-            '3 room': '#ed975a',
-            '4 room': '#ba7ed9'
-        }
         if self.floor_figures:
             for floor in self.floor_figures:
                 self.scene.removeItem(floor)
@@ -559,6 +464,11 @@ class Painter(QGraphicsView):
             for room in self.rooms:
                 self.scene.removeItem(room)
         # Добавляем квартиры на сцену
+        if show_rooms:
+            self.room_legend_widget.setVisible(True)
+        else:
+            self.room_legend_widget.setVisible(False)
+
         for i in range(len(self.floors)):
             building = self.floors[i]
             floor = building[floor_num]
@@ -591,3 +501,15 @@ class Painter(QGraphicsView):
                         self.rooms.append(filled_shape)
                         if show_rooms:
                             self.scene.addItem(filled_shape)
+                        for window in apt.windows:
+                            window_linestring = window.line
+                            x1, y1 = window_linestring.coords[0]
+                            x2, y2 = window_linestring.coords[1]
+
+                            gray_line = QGraphicsLineItem(QLineF(QPointF(x1, y1), QPointF(x2, y2)))
+                            gray_line.setPen(QPen(Qt.lightGray, 0.3))
+                            self.scene.addItem(gray_line)
+
+
+
+
