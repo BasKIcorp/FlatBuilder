@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+import os
 
 class RLAgent:
     def __init__(self,
@@ -21,11 +22,13 @@ class RLAgent:
 
         # Логирование
         self.log_filename = log_filename
-        # Открываем файл на добавление
-        self.log_file = open(self.log_filename, "a", encoding="utf-8")
 
-        # Для удобства можно записать "шапку" лог-файла
-        self.log_file.write("\n==== New RLAgent session starts ====\n")
+        # --- Создаем/перезаписываем файл лога ---
+        # 'w' означает открыть файл на запись (и стереть содержимое, если он существует).
+        self.log_file = open(self.log_filename, "w", encoding="utf-8")
+
+        # Шапка лога
+        self.log_file.write("==== New RLAgent session starts ====\n")
 
     def act(self, state, possible_actions):
         """
@@ -77,7 +80,10 @@ class RLAgent:
         self.Q[(s, a)] = new_q
 
         # Логируем
-        self.log_file.write(f"[STORE] s={s}, a={a}, r={reward}, new_s={new_state}, done={done}, oldQ={old_q:.3f}, newQ={new_q:.3f}\n")
+        self.log_file.write(
+            f"[STORE] s={s}, a={a}, r={reward}, new_s={new_state}, done={done}, "
+            f"oldQ={old_q:.3f}, newQ={new_q:.3f}\n"
+        )
 
         if done:
             # сброс
@@ -92,9 +98,7 @@ class RLAgent:
         Когда эпизод (планировка) закончился, делаем финальное обновление, если хотим.
         И логируем.
         """
-        # финальный вызов store_transition с done=True
         self.store_transition(final_reward, new_state=None, done=True)
-
         self.log_file.write(f"[EPISODE_END] final_reward={final_reward}\n")
 
     def close(self):

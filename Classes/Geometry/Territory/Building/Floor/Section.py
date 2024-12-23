@@ -48,6 +48,20 @@ class Section(GeometricFigure):
         start_time = time.time()
 
         for iteration in range(max_iterations):
+            if iteration % 10 == 0 and best_plan is not None:
+                self.apartments = best_plan
+                # Финальная настройка каждого Apartment
+                for apt in self.apartments:
+                    apt.section_polygon = self.polygon
+                    apt.cells = None
+                    apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
+                    apt._process_cells()
+                    apt.generate_apartment_planning()
+
+                total_time = time.time() - start_time
+                print(f"[Section] Планировка завершена за {total_time:.2f} секунд.")
+                return self.apartments
+
             print(f"[Section] Iteration {iteration} ...")
 
             # Создаем сетку клеток заново
@@ -71,6 +85,11 @@ class Section(GeometricFigure):
                     apt._reset_cell_assignments()
                 continue
 
+            if not self._validate_apartments_free_sides(apartments_candidate):
+                for apt in apartments_candidate:
+                    apt._reset_cell_assignments()
+                continue
+
             # Считаем суммарную "прямоугольность"
             total_rectangularity = sum(self._rectangularity_score(apt.polygon) for apt in apartments_candidate)
 
@@ -79,7 +98,7 @@ class Section(GeometricFigure):
                 best_plan = apartments_candidate
 
             # Если достигли "достаточно хорошего" результата
-            if best_rectangularity_score < 0.7:
+            if best_rectangularity_score < 1:
                 break
 
         # Сохраняем лучший результат
@@ -164,7 +183,7 @@ class Section(GeometricFigure):
                         if len(new_apartment_cells) < min_cells:
                             break
                         new_apartment_polygon = unary_union([cell['polygon'] for cell in new_apartment_cells])
-                        if new_apartment_polygon.envelope.area < apartment_polygon.envelope.area:
+                        if new_apartment_polygon.envelope.area == apartment_polygon.envelope.area:
                             apartment_polygon = new_apartment_polygon.buffer(0)
                             for cell in candidate_cells[(-1 - i):]:
                                 cell['assigned'] = False
@@ -185,9 +204,10 @@ class Section(GeometricFigure):
                     building_polygon=self.building_polygon
                 )
                 new_apt.cells = candidate_cells
-                free_cells_num = self._calc_free_cells(apartments, Polygon(points))
-                w = 1
-                reward = w * free_cells_num
+                # free_cells_num = self._calc_free_cells(apartments, Polygon(points))
+                # w = 1
+                # reward = w * free_cells_num
+                reward = 1
                 apartments.append(new_apt)
 
                 # Уменьшаем количество
@@ -214,7 +234,7 @@ class Section(GeometricFigure):
                 new_sorted_types = sorted(apartment_table_copy.keys())
                 new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
                 self.agent.store_transition(
-                    reward=-2,  # карательный штраф
+                    reward=-1.0,  # карательный штраф
                     new_state=new_state_tuple,
                     done=False
                 )
@@ -257,65 +277,47 @@ class Section(GeometricFigure):
     def _corner_based_allocation(self, remaining_cells, apartments, apt_cell_count, min_cells):
         """
         Сценарий, когда есть очередь углов self.queue_corners_to_allocate.
-        Перебираем все углы, формируем варианты, выбираем лучший по rectangularity_score.
+        Теперь ВСЕГДА выбираем ТОЛЬКО последний элемент (угол) из self.queue_corners_to_allocate.
         """
-        variants = []
+        # Сохраняем текущее состояние (кто assigned)
         original_assigned = [(c, c['assigned']) for c in self.cells]
 
-        for corner_cell in self.queue_corners_to_allocate:
-            # Откатываемся в изначальное состояние
-            for c, was_assigned in original_assigned:
-                c['assigned'] = was_assigned
-
-            candidate_cells = self._bfs_allocate_cells(corner_cell, apt_cell_count, remaining_cells)
-            if not candidate_cells or len(candidate_cells) < min_cells:
-                # Откат
-                for cell in candidate_cells:
-                    cell['assigned'] = False
-                continue
-            apartments_intersection = []
-            overlapping = False
-            for apartment in apartments:
-                if any(apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).intersects(cell['polygon'])
-                       for cell in candidate_cells):
-                    apartments_intersection.append(apartment)
-            for apartment in apartments_intersection:
-                free_cells_count = 0
-                for cell in [cell for cell in
-                             apartment.cells if cell['polygon'].exterior.intersects(apartment.polygon.exterior)]:
-                    for neighbor in cell['neighbors']:
-                        if not neighbor['assigned'] and neighbor not in apartment.cells:
-                            free_cells_count += 1
-                if free_cells_count < 6:
-                    overlapping = True
-                    break
-            if overlapping:
-                for cell in candidate_cells:
-                    cell['assigned'] = False
-                continue
-
-            # Подсчитываем rectangularity
-            union_poly = unary_union([cell['polygon'] for cell in candidate_cells])
-            score = self._rectangularity_score(union_poly)
-            variants.append((score, candidate_cells, corner_cell))
-
-        if not variants:
+        # Если нет углов - сразу выходим
+        if not self.queue_corners_to_allocate:
             return None
 
-        # Выбираем лучший (минимальный score)
-        variants.sort(key=lambda x: x[0])
-        best_score, best_cells, best_corner = variants[0]
+        # Берём последний угол (cell)
+        corner_cell = self.queue_corners_to_allocate[-1]
 
-        # Утверждаем лучший вариант
-        # Снова откатываемся в изначальное состояние
+        # Откатываем все клетки в исходное состояние
         for c, was_assigned in original_assigned:
             c['assigned'] = was_assigned
-        # Назначаем best_cells
-        for cell in best_cells:
+
+        # Вызываем BFS, чтобы получить candidate_cells
+        candidate_cells = self._bfs_allocate_cells(corner_cell, apt_cell_count, remaining_cells)
+        if not candidate_cells or len(candidate_cells) < min_cells:
+            # Если ничего не получилось - откат и выход
+            for cell in candidate_cells:
+                cell['assigned'] = False
+            return None
+
+        # Считаем "прямоугольность"
+        union_poly = unary_union([cell['polygon'] for cell in candidate_cells])
+        score = self._rectangularity_score(union_poly)
+
+        # Снова откатываем (перед финальным применением)
+        for c, was_assigned in original_assigned:
+            c['assigned'] = was_assigned
+
+        # Назначаем клетки
+        for cell in candidate_cells:
             cell['assigned'] = True
-        # Убираем угол из очереди
-        self.queue_corners_to_allocate.remove(best_corner)
-        return best_cells
+
+        # Убираем этот угол из очереди (раз мы его уже использовали)
+        self.queue_corners_to_allocate.remove(corner_cell)
+
+        # Возвращаем candidate_cells как итог
+        return candidate_cells
 
     def _bfs_allocate_cells(self, start_cell, apt_cell_count, remaining_cells):
         """
@@ -346,6 +348,7 @@ class Section(GeometricFigure):
         Проверяем, что кол-во сгенерированных квартир совпадает с ожидаемым self.total_apartment_number.
         """
         return (len(apartments) == self.total_apartment_number)
+
 
     def _rectangularity_score(self, poly):
         """
@@ -546,3 +549,43 @@ class Section(GeometricFigure):
                 if cell['polygon'].exterior.intersects(apartment.polygon.exterior) and not cell['assigned']:
                     free_cell_count += 1
         return free_cell_count
+
+    def _validate_apartments_free_sides(self, apartments):
+        """Second validation: Checks that each apartment has at least one free side.
+
+        A free side is a side not adjacent to the external perimeter or any other apartment.
+        Returns True if all apartments have at least one free side, False otherwise.
+        """
+        all_valid = True
+        for i, apt in enumerate(apartments):
+            apartment_polygon = apt.polygon
+            has_free_side = False
+            # Get the exterior coordinates as pairs of points
+            coords = list(apartment_polygon.exterior.coords)
+            # Create LineStrings for each side
+            sides = [LineString([coords[j], coords[j + 1]]) for j in
+                     range(len(coords) - 1)]  # last point is same as first
+            free_sides = []
+            building_perimeter_sides = []
+            for side in sides:
+                side_touches_section_perimeter = self.polygon.exterior.intersects(side)
+                side_touches_building_perimeter = self.building_polygon.exterior.intersects(side)
+                side_touches_other_apartment = False
+                # Check if side intersects with any other apartment
+                for k, other_apt in enumerate(apartments):
+                    if k == i:
+                        continue
+                    if other_apt.polygon.exterior.intersects(side):
+                        side_touches_other_apartment = True
+                        break  # Side touches another apartment
+                if not side_touches_other_apartment and not side_touches_section_perimeter:
+                    has_free_side = True
+                    free_sides.append(side)
+                if side_touches_building_perimeter:
+                    building_perimeter_sides.append(side)
+            if not has_free_side:
+                all_valid = False
+
+            apt.free_sides = free_sides
+            apt.building_perimeter_sides = building_perimeter_sides
+        return all_valid
