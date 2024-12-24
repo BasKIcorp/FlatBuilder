@@ -137,6 +137,7 @@ class MainWindow(QMainWindow):
         self.checkbox.setFont(font)
         self.checkbox.setFixedHeight(40)
         self.checkbox.setFixedWidth(250)
+        self.checkbox.setStyleSheet("QCheckBox { border: none; }")
 
         floor_layout.addWidget(self.floor_label)
         floor_layout.addWidget(self.floor_edit, alignment=Qt.AlignLeft)
@@ -145,7 +146,7 @@ class MainWindow(QMainWindow):
         self.right_layout.addLayout(floor_layout)
 
         button_font = QFont()
-        button_font.setPointSize(9)
+        button_font.setPointSize(10)
         button_font.setBold(False)
 
         self.generate_button = QPushButton("Сгенерировать")
@@ -251,8 +252,6 @@ class MainWindow(QMainWindow):
         self.output_table.setFixedSize(505, 255)
 
         self.right_layout.addWidget(self.output_table)
-
-
 
         bottom_buttons = QVBoxLayout()
         bottom_buttons.setAlignment(Qt.AlignBottom)
@@ -525,6 +524,10 @@ class MainWindow(QMainWindow):
                             self.scene.removeItem(room)
                         for filled_shape in self.graphics_view.floor_figures:
                             self.scene.removeItem(filled_shape)
+                        for apt_area in self.graphics_view.apt_areas:
+                            self.scene.removeItem(apt_area)
+                        for room_area in self.graphics_view.room_areas:
+                            self.scene.removeItem(room_area)
                     self.generate_button.setDisabled(True)
                     self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")

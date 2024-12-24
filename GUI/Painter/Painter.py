@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor
+from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor, QFont
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem, QGraphicsEllipseItem, QGraphicsLineItem, \
     QGraphicsTextItem, QGraphicsRectItem, QWidget, QHBoxLayout, QLabel, QFrame, QGraphicsItem, QVBoxLayout, QSpacerItem, \
     QSizePolicy
@@ -116,6 +116,7 @@ class AptLegendWidget(QWidget):
         # Set the main layout
         self.setLayout(self.apt_layout)
 
+
 class RoomLegendWidget(QWidget):
     def __init__(self):
         super().__init__()
@@ -140,7 +141,6 @@ class RoomLegendWidget(QWidget):
 
         # Set the main layout
         self.setLayout(self.room_layout)
-
 
 
 class Painter(QGraphicsView):
@@ -183,6 +183,9 @@ class Painter(QGraphicsView):
         self.cut_second_point = None
         self.output_tables = None
         self.generator_error = None
+        self.window_items = []
+        self.apt_areas = []
+        self.room_areas = []
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
@@ -198,6 +201,23 @@ class Painter(QGraphicsView):
         self.room_legend_widget.setParent(self)  # Make the legend part of the view
         self.room_legend_widget.move(0, 55)
         self.room_legend_widget.setVisible(False)
+
+    def set_preview_rectangle(self, width, height, mode):
+        cursor_pos = QCursor.pos()  # Получаем позицию курсора в глобальных координатах
+        scene_pos = self.mapToScene(self.mapFromGlobal(cursor_pos))  # Преобразуем в координаты сцены
+
+        if self.preview_point:
+            self.scene.removeItem(self.preview_point)
+        if self.preview_rect:
+            self.scene.removeItem(self.preview_rect)
+
+        self.rect_width = width
+        self.rect_height = height
+
+        self.preview_rect = self.scene.addRect(0, 0, width, height)
+        self.preview_rect.setPos(scene_pos - QPointF(self.rect_width / 2, self.rect_height / 2))
+        self.mode = mode
+        self.preview_rect.setPen(QPen(Qt.DashLine))
 
     def reset(self):
         self.all_points = []
@@ -224,6 +244,9 @@ class Painter(QGraphicsView):
         self.cut_first_point = None
         self.cut_second_point = None
         self.generator_error = None
+        self.window_items = []
+        self.apt_areas = []
+        self.room_areas = []
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -428,6 +451,7 @@ class Painter(QGraphicsView):
                     for i in range(len(x)):
                         section.append((x[i], y[i]))
                     sections.append(section)
+        print(buildings)
         if not self.cuts:
             sections = buildings
         territory = Territory(building_points=buildings, sections_coords=sections,
@@ -457,6 +481,12 @@ class Painter(QGraphicsView):
         self.apartmentsGenerated.emit()
 
     def show_floor(self, floor_num, show_rooms):
+        if self.apt_areas:
+            for area in self.apt_areas:
+                self.scene.removeItem(area)
+        if self.room_areas:
+            for area in self.room_areas:
+                self.scene.removeItem(area)
         if self.floor_figures:
             for floor in self.floor_figures:
                 self.scene.removeItem(floor)
@@ -482,11 +512,31 @@ class Painter(QGraphicsView):
                     polygon = clip_polygon(polygon, outer_polygon)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
+                    filled_shape.setToolTip(f"Площадь: {area}м^2")
                     filled_shape.setPen(QPen(Qt.black, 0.3))
                     filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                    filled_shape.setToolTip(f"Площадь: {area}м^2")
+                    #
+                    # shape = qpolygonf_to_shapely(QPolygonF(poly_points))
+                    # centroid = shape.centroid
+                    # centroid_x, centroid_y = centroid.x, centroid.y
+                    # area = shape.area
+
                     self.floor_figures.append(filled_shape)
                     self.scene.addItem(filled_shape)
+                    #
+                    # area_text = QGraphicsTextItem(f"{area:.1f}")
+                    # area_text.setScale(0.05)
+                    # bounding_rect = area_text.boundingRect()
+                    # scaled_width = bounding_rect.width() * area_text.scale()
+                    # scaled_height = bounding_rect.height() * area_text.scale()
+                    #
+                    # centered_x = centroid_x - scaled_width / 2
+                    # centered_y = centroid_y - scaled_height / 2
+                    #
+                    # area_text.setPos(centered_x, centered_y)
+                    # area_text.setZValue(1)
+                    # self.scene.addItem(area_text)
+                    # self.apt_areas.append(area_text)
                     for room in apt.rooms:
                         x, y = room.polygon.exterior.xy
                         poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
@@ -499,8 +549,34 @@ class Painter(QGraphicsView):
                         filled_shape.setBrush(QBrush(QColor(room_colors.get(room.type, 'grey'))))
                         filled_shape.setPen(QPen(Qt.black, 0.05))
                         self.rooms.append(filled_shape)
+
+                        # shape = qpolygonf_to_shapely(QPolygonF(poly_points))
+                        # centroid = shape.centroid
+                        # centroid_x, centroid_y = centroid.x, centroid.y
+                        # area = shape.area
+                        #
+                        # area_text = QGraphicsTextItem(f"{area:.1f}")
+                        # area_text.setScale(0.05)
+                        #
+                        # bounding_rect = area_text.boundingRect()
+                        # scaled_width = bounding_rect.width() * area_text.scale()
+                        # scaled_height = bounding_rect.height() * area_text.scale()
+                        #
+                        # centered_x = centroid_x - scaled_width / 2
+                        # centered_y = centroid_y - scaled_height / 2
+                        #
+                        # area_text.setPos(centered_x, centered_y)
+                        # area_text.setZValue(1)
+                        # self.room_areas.append(area_text)
                         if show_rooms:
                             self.scene.addItem(filled_shape)
+                            if self.apt_areas:
+                                for area in self.apt_areas:
+                                    self.scene.removeItem(area)
+                            # self.scene.addItem(area_text)
+                        for item in self.window_items:
+                            self.scene.removeItem(item)
+                        self.window_items.clear()
                         for window in apt.windows:
                             window_linestring = window.line
                             x1, y1 = window_linestring.coords[0]
@@ -510,6 +586,4 @@ class Painter(QGraphicsView):
                             gray_line.setPen(QPen(Qt.lightGray, 0.3))
                             self.scene.addItem(gray_line)
 
-
-
-
+                            self.window_items.append(gray_line)
