@@ -55,13 +55,7 @@ class Building(GeometricFigure):
         floor_patterns = self.create_unique_floor_pattern(floor_tables)
         # Шаг 3: Генерируем этажи
         self._generate_upper_floors(floor_patterns)
-        self.floors.insert(0, Floor(points=self.points,
-                      sections_list=self.sections,
-                      apartment_table=self.apartment_table,
-                      building_polygon=self.polygon))
-        for section in self.floors[0].sections:
-            section.apartments = []
-
+        self._generate_first_floor(floor_patterns[0])  # Используем первый кортеж
 
     def _generate_single_floor(self):
         """Генерация единственного этажа."""
@@ -99,14 +93,28 @@ class Building(GeometricFigure):
             previous_floor = floor
 
     def _generate_first_floor(self, first_pattern: Tuple[Dict, int]):
-        """Генерация первого этажа на основе первого паттерна."""
-        first_pattern_dict = first_pattern[0]  # Извлекаем первый словарь и игнорируем количество повторений
+        """
+        Генерация первого этажа на основе первого паттерна,
+        но при этом обнуляем число квартир (number=0),
+        чтобы этаж был полностью пустым.
+        """
+        base_pattern, _ = first_pattern  # первый словарь и количество повторений
+
+        # Создаём "пустой" паттерн с number=0
+        empty_pattern = {}
+        for apt_type, apt_info in base_pattern.items():
+            new_info = dict(apt_info)
+            new_info["number"] = 0
+            empty_pattern[apt_type] = new_info
+
+        # Создаём этаж, передав пустой паттерн
         first_floor = Floor(points=self.points,
                             sections_list=self.sections,
-                            apartment_table=first_pattern_dict,
+                            apartment_table=empty_pattern,
                             building_polygon=self.polygon)
         first_floor.generate_floor_planning()
-        self.floors.insert(0, first_floor)  # Добавляем первый этаж в начало списка
+        # Ставим этот этаж первым
+        self.floors.insert(0, first_floor)
 
     def _modify_existing_floor_sections(self, floor: Floor, current_pattern: Dict, base_pattern: Dict):
         """
@@ -303,8 +311,6 @@ class Building(GeometricFigure):
             new_floor.sections[i].apartments = deepcopy(floor.sections[i].apartments)
 
         return new_floor
-
-
 
 
 

@@ -160,8 +160,8 @@ class Territory(GeometricFigure):
                 threshold_area = avg_potential_area
                 print(total_building_area)
                 print(threshold_area)
-                if not threshold_area < total_building_area * 0.7:
-                    min_area_to_reduce = threshold_area - total_building_area * 0.7
+                if not threshold_area < total_building_area * 0.6:
+                    min_area_to_reduce = threshold_area - total_building_area * 0.6
                     self.messages.append(
                         f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
                     )
@@ -170,7 +170,7 @@ class Territory(GeometricFigure):
                     continue
             else:
                 allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
-                threshold_area = 0.6 * allocatable_area
+                threshold_area = 0.7 * allocatable_area
                 if not avg_potential_area < threshold_area:
                     # Шаг 5: Расчет минимальной площади для уменьшения
                     min_area_to_reduce = avg_potential_area - threshold_area

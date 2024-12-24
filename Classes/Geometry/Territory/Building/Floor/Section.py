@@ -44,6 +44,8 @@ class Section(GeometricFigure):
         for iteration in range(max_iterations):
             print(f"Итерация {iteration}")
             deleting_outsider = False
+            if not best_plan and iteration == 16:
+                deleting_outsider = True
             if best_plan and iteration % 5 == 0:
                 self.apartments = best_plan
                 if not self.apartments:
@@ -66,12 +68,14 @@ class Section(GeometricFigure):
 
             # **Validation**: Validate apartments for free sides
             if not apartments:
+                print('not apt')
                 for apart in apartments:
                     apart._reset_cell_assignments()
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
 
             if not self._validate_apartment_number(apartments, deleting_outsider):
+                print('not num')
                 # Если неверное кол-во, откатываемся
                 for apt in apartments:
                     apt._reset_cell_assignments()
@@ -209,36 +213,34 @@ class Section(GeometricFigure):
             apartment.cells = apartment_cells
             apartments.append(apartment)
             fail = False
-            for cell in self.initial_corner_cells:
-                if cell['polygon'].intersects(apartment.polygon):
-                    has_outsiders, outsiders = self.validate_apartment_connectivity(apartments)
-                    if has_outsiders:
-                        if deleting_outsider:
-                            new_sorted_types = sorted(apartment_table_copy.keys())
-                            new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
-                            self.agent.store_transition(
-                                reward=-1.0,  # карательный штраф
-                                new_state=new_state_tuple,
-                                done=False
-                            )
-                            for outsider in outsiders:
-                                for cell in outsider.cells:
-                                    cell['assigned'] = False
-                                apartments.remove(outsider)
-                        else:
-                            self._update_cell_properties(apartment_cells)
-                            for cell in apartment.cells:
-                                cell['assigned'] = False
-                            new_sorted_types = sorted(apartment_table_copy.keys())
-                            new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
-                            self.agent.store_transition(
-                                reward=-2.0,  # карательный штраф
-                                new_state=new_state_tuple,
-                                done=False
-                            )
-                            apartments.remove(apartment)
-                            fail = True
-                            break
+            has_outsiders, outsiders = self.validate_apartment_connectivity(apartments)
+            if has_outsiders:
+                if deleting_outsider:
+                    new_sorted_types = sorted(apartment_table_copy.keys())
+                    new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
+                    self.agent.store_transition(
+                        reward=-1.0,  # карательный штраф
+                        new_state=new_state_tuple,
+                        done=False
+                    )
+                    for outsider in outsiders:
+                        for cell in outsider.cells:
+                            cell['assigned'] = False
+                        apartments.remove(outsider)
+                else:
+                    self._update_cell_properties(apartment_cells)
+                    for cell in apartment.cells:
+                        cell['assigned'] = False
+                    new_sorted_types = sorted(apartment_table_copy.keys())
+                    new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
+                    self.agent.store_transition(
+                        reward=-2.0,  # карательный штраф
+                        new_state=new_state_tuple,
+                        done=False
+                    )
+                    apartments.remove(apartment)
+                    fail = True
+
             if fail:
                 continue
             self._update_cell_properties(apartment_cells)
@@ -356,7 +358,7 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.2 + min_cells), int((max_cells - min_cells) * 0.8 + min_cells))
+        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.35 + min_cells), int((max_cells - min_cells) * 0.6 + min_cells))
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
@@ -425,6 +427,36 @@ class Section(GeometricFigure):
                 return None
             return apartment_cells
 
+        elif len([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
+            queue = [random.choice([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']])]
+            while queue and len(apartment_cells) < apt_cell_count:
+                current_cell = queue.pop(0)
+                if current_cell['assigned']:
+                    continue
+                visited_cells.add(current_cell['id'])
+                apartment_cells.append(current_cell)
+
+                current_cell['assigned'] = True
+                remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+
+                # Получаем не назначенные соседние клетки
+                neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
+
+                # Сортируем соседей по убыванию количества их свободных соседей
+                neighbors_sorted = sorted(
+                    neighbors,
+                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+                    reverse=True
+                )
+                # Добавляем отсортированных соседей в очередь
+                queue.extend(neighbors_sorted)
+            # Проверка, удалось ли выделить нужное количество клеток
+            if len(apartment_cells) < min_cells:
+                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+                for cell in apartment_cells:
+                    cell['assigned'] = False
+                return None
+            return apartment_cells
 
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""
@@ -523,7 +555,7 @@ class Section(GeometricFigure):
         # Проверяем тип self.free_polygon
         free_polygon = union_all([cell['polygon'] for cell in self.cells if not cell['assigned']])
         # Проверяем тип self.free_polygon
-        if free_polygon.geom_type == 'MultiPolygon':
+        if isinstance(free_polygon, MultiPolygon):
             # Выбираем самый большой полигон из MultiPolygon
             free_polygon = max(free_polygon.geoms, key=lambda p: p.area)
         # Генерируем список квартир, не пересекающихся с полигоном
