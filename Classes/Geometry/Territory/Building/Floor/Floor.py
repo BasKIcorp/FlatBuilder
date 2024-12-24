@@ -35,6 +35,7 @@ class Floor(GeometricFigure):
                               building_polygon=self.building_polygon)
             self.sections.append(section)
             if not is_copy:
+                section.cells = None
                 section.check_and_create_cell_grid(cell_size=1, polygon_to_check=section.polygon)
                 section.generate_section_planning(max_iterations=50)
         else:
@@ -43,10 +44,10 @@ class Floor(GeometricFigure):
             for i, (points, section_table) in enumerate(zip(self.sections_list, section_tables)):
                 section = Section(points=points,
                                   apartment_table=section_table,
-                                  building_polygon=self.building_polygon,
-                                  single_floor=self.single_floor)
+                                  building_polygon=self.building_polygon)
                 self.sections.append(section)
                 if not is_copy:
+                    section.cells = None
                     section.check_and_create_cell_grid(cell_size=1, polygon_to_check=section.polygon)
                     section.generate_section_planning(max_iterations=20)
 

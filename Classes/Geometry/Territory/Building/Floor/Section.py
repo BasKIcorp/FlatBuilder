@@ -1,7 +1,11 @@
+from shapely.geometry.multilinestring import MultiLineString
+from shapely.set_operations import intersection
+
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Apartment.Apartment import Apartment
 from Classes.Geometry.Territory.Building.Elevator import Elevator
 from Classes.Geometry.Territory.Building.Stair import Stair
+from Classes.Geometry.Territory.RLAgent import RLAgent
 from shapely.geometry import Polygon, LineString, MultiPolygon
 from shapely.ops import unary_union
 import random
@@ -23,20 +27,24 @@ class Section(GeometricFigure):
         self.building_polygon = building_polygon
         self.messages = []
         self.total_apartment_number = self._calc_total_apartment_number()
+        self.agent = RLAgent()
+        self.removed_apartments_table = {}
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
         """Generates a floor plan by allocating apartments according to the given apartment table."""
         self.apartments = []  # Initialize as empty list
         best_plan = None
-        best_score = float('inf')  # The low3   2er, the better
+        best_score = float('inf')  # The lower, the better
         start_time = time.time()
         if not self.apartment_table:
             return
         # Create the cell grid once
 
         for iteration in range(max_iterations):
-            if best_plan:
+            print(f"Итерация {iteration}")
+
+            if best_plan and iteration % 5 == 0:
                 self.apartments = best_plan
                 if not self.apartments:
                     print("Не нашел планировку")
@@ -53,7 +61,12 @@ class Section(GeometricFigure):
             self.queue_corners_to_allocate = []
             # self._reset_cell_assignments()
             # Allocate apartments using the cell grid
-            apartments = self._allocate_apartments(self.cells)
+            apartments, removed_apartments_table = self._allocate_apartments(self.cells)
+            if removed_apartments_table == 'None':
+                for apart in apartments:
+                    apart._reset_cell_assignments()
+                    self._process_cells()
+                continue  # No apartments allocated in this iteration
             best_rectangularity = float('inf')
 
             # **Validation**: Validate apartments for free sides
@@ -63,26 +76,22 @@ class Section(GeometricFigure):
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
 
-            if not self._validate_apartment_number(apartments):
+            if not self._validate_apartment_number(apartments, removed_apartments_table):
                 # Если неверное кол-во, откатываемся
                 for apt in apartments:
                     apt._reset_cell_assignments()
                 continue
-
-            if not self._validate_apartments_free_sides(apartments):
-                # Allocation is invalid, skip to next iteration
-                for apart in apartments:
-                    apart.check_and_create_cell_grid(cell_size=1)
-                    apart._reset_cell_assignments()
-                    self._process_cells()
+            if not self.has_sufficient_apartments(apartments, removed_apartments_table):
+                for apt in apartments:
+                    apt._reset_cell_assignments()
                 continue
-
             total_rectangularity_error = sum(self._rectangularity_score(apt.polygon) for apt in apartments)
 
             # Сравнение с лучшей найденной планировкой
             if total_rectangularity_error < best_rectangularity:
                 best_rectangularity = total_rectangularity_error
                 best_plan = apartments
+                self.removed_apartments_table = removed_apartments_table
             if best_rectangularity < 0.01:
                 break
 
@@ -90,11 +99,14 @@ class Section(GeometricFigure):
             if best_score == 0:
                 break
 
+
+
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         if not self.apartments:
             print("Не нашел планировку")
         for apt in self.apartments:
             apt.section_polygon = self.polygon
+            apt.cells = None
             apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
             apt._process_cells()
             apt.generate_apartment_planning()
@@ -130,67 +142,113 @@ class Section(GeometricFigure):
         remaining_cells = [cell for cell in cells if not cell['assigned']]
         self.initial_corner_cells = [cell for cell in cells if cell['is_corner']]
 
-        for apt_type, apt_info in reversed(self.apartment_table.items()):
+        # Создаем копию apartment_table
+        apartment_table_copy = copy.deepcopy(self.apartment_table)
 
+        while apartment_table_copy:
+            while_start_time = time.time()
+            if time.time() - while_start_time > 12:
+                break
+            # Выбираем случайный тип квартиры из доступных
+            sorted_types = sorted(apartment_table_copy.keys())
+            state_tuple = tuple(apartment_table_copy[t]['number'] for t in sorted_types)
+            # 2) possible_actions = список apt_types
+            possible_actions = list(apartment_table_copy.keys())
+
+            # 3) вызываем агент
+            apt_type = self.agent.act(state_tuple, possible_actions)
+
+            # 4) берем данные
+            apt_info = apartment_table_copy[apt_type]
             min_cells, max_cells = self._get_apartment_cell_range(apt_info['area_range'], cell_size=self.cell_size)
             number = apt_info['number']
-            minimum = min_cells * number
-            while number > 0:
-                apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
-                if not apartment_cells:
-                    break  # No more apartments of this type can be allocated
-                apartment_cells = self.fill_section_perimeter(self.cells, apartment_cells, max_cells)
+
+
+            # Пытаемся разместить квартиру
+            apartment_cells = self._allocate_apartment_cells(remaining_cells, min_cells, max_cells)
+            if not apartment_cells:
+                new_sorted_types = sorted(apartment_table_copy.keys())
+                new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
+                self.agent.store_transition(
+                    reward=-1.0,  # карательный штраф
+                    new_state=new_state_tuple,
+                    done=False
+                )
+                continue
+
+            apartment_cells = self.fill_section_perimeter(self.cells, apartment_cells, max_cells)
+            remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+
+            # Создаем полигон для квартиры
+            apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
+            rectangular_apartment_polygon = apartment_polygon.envelope
+
+            if rectangular_apartment_polygon.area < max_cells:
+                for cell in remaining_cells:
+                    if not cell['assigned'] and rectangular_apartment_polygon.contains(cell['polygon']):
+                        apartment_cells.append(cell)
+                        cell['assigned'] = True
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-
-                # Create the apartment polygon
-                apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
-                rectangular_apartment_polygon = apartment_polygon.envelope
-                if rectangular_apartment_polygon.area < max_cells:
-                    for cell in remaining_cells:
-                        if not cell['assigned'] and rectangular_apartment_polygon.contains(cell['polygon']):
-                            apartment_cells.append(cell)
-                            cell['assigned'] = True
+                rectangular_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
+                if isinstance(rectangular_apartment_polygon, Polygon):
+                    points = list(rectangular_apartment_polygon.exterior.coords)
+                elif isinstance(rectangular_apartment_polygon, MultiPolygon):
+                    for cell in apartment_cells:
+                        cell['assigned'] = False
                     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                    rectangular_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells])
-                    if isinstance(rectangular_apartment_polygon, Polygon):  # Если это Polygon
-                        points = list(rectangular_apartment_polygon.exterior.coords)
-
-                    elif isinstance(rectangular_apartment_polygon, MultiPolygon):  # Если это MultiPolygon
-                        for cell in apartment_cells:
+                    continue
+            else:
+                for i in range(3):
+                    new_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells[:(-1 - i)]])
+                    if new_apartment_polygon.area == apartment_polygon.envelope.area:
+                        apartment_polygon = new_apartment_polygon.copy()
+                        for cell in apartment_cells[(-1 - i):]:
                             cell['assigned'] = False
-                        remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                        continue
-                # Проверяем тип полигона
-                else:
-                    for i in range(3):
-                        new_apartment_polygon = unary_union([cell['polygon'] for cell in apartment_cells[:(-1 - i)]])
-                        if new_apartment_polygon.area == apartment_polygon.envelope.area:
-                            apartment_polygon = new_apartment_polygon.copy()
-                            for cell in apartment_cells[(-1 - i):]:
-                                cell['assigned'] = False
-                            apartment_cells = apartment_cells[(-1 - i):]
-                            break
-                    if isinstance(apartment_polygon, Polygon):  # Если это Polygon
-                        points = list(apartment_polygon.boundary.coords)
-                    elif isinstance(apartment_polygon, MultiPolygon):  # Если это MultiPolygon
-                        for cell in apartment_cells:
-                            cell['assigned'] = False
-                        remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                        continue
+                        apartment_cells = apartment_cells[(-1 - i):]
+                        break
+                if isinstance(apartment_polygon, Polygon):
+                    points = list(apartment_polygon.boundary.coords)
+                elif isinstance(apartment_polygon, MultiPolygon):
+                    for cell in apartment_cells:
+                        cell['assigned'] = False
+                    remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
+                    continue
 
-                # if self._check_intersection_with_structures(points):
-                #     for cell in apartment_cells:
-                #         cell['assigned'] = False
-                #     remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                #     continue
-                self._update_cell_properties(apartment_cells)
+            self._update_cell_properties(apartment_cells)
 
-                apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
-                apartment.cells = apartment_cells
-                apartments.append(apartment)
-                number -= 1
+            # Создаем объект Apartment
+            apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
+            apartment.cells = apartment_cells
+            apartments.append(apartment)
+            reward = 1
+            # Уменьшаем количество квартир данного типа
+            apartment_table_copy[apt_type]['number'] -= 1
+            if apartment_table_copy[apt_type]['number'] == 0:
+                del apartment_table_copy[apt_type]
+            new_sorted_types = sorted(apartment_table_copy.keys())
+            new_state_tuple = tuple(apartment_table_copy[t]['number'] for t in new_sorted_types)
+            self.agent.store_transition(
+                reward=reward,
+                new_state=new_state_tuple,
+                done=False
+            )
+        # Проверяем свободные стороны и удаляем квартиры
+        removed_apartments_table = {apt_type: {'removed': 0} for apt_type in self.apartment_table.keys()}
+        invalid_apartments = self._validate_apartments_free_sides(apartments)
+        if invalid_apartments is None:
+            final_reward = -3.0
+            self.agent.on_episode_end(final_reward)
+            return apartments, 'None'
+        total_remove = 0
+        for invalid_apt in invalid_apartments:
+            apartments.remove(invalid_apt)
+            removed_apartments_table[invalid_apt.type]['removed'] += 1
+            total_remove += 1
+        apartments, removed_apartments_table = self.validate_apartment_connectivity(apartments, removed_apartments_table)
+        final_reward = -1.0 * sum(self._rectangularity_score(apt.polygon) for apt in apartments) - 2.0 * total_remove
+        self.agent.on_episode_end(final_reward)
 
-        return apartments
+        return apartments, removed_apartments_table
 
     def _validate_apartment_perimeter_adjacency(self, apartment_polygon):
         """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
@@ -203,11 +261,15 @@ class Section(GeometricFigure):
         Returns True if all apartments have at least one free side, False otherwise.
         """
         all_valid = True
+        aparts_to_remove = []
         for i, apt in enumerate(apartments):
-            apartment_polygon = apt.polygon
+            apartment_polygon = intersection(apt.polygon, self.polygon)
             has_free_side = False
             # Get the exterior coordinates as pairs of points
-            coords = list(apartment_polygon.exterior.coords)
+            if isinstance(apartment_polygon, Polygon):
+                coords = list(apartment_polygon.exterior.coords)
+            else:
+                return None
             # Create LineStrings for each side
             sides = [LineString([coords[j], coords[j + 1]]) for j in
                      range(len(coords) - 1)]  # last point is same as first
@@ -224,23 +286,27 @@ class Section(GeometricFigure):
                     if other_apt.polygon.exterior.intersects(side):
                         side_touches_other_apartment = True
                         break  # Side touches another apartment
+
                 if not side_touches_other_apartment and not side_touches_section_perimeter:
                     has_free_side = True
                     free_sides.append(side)
                 if side_touches_building_perimeter:
                     building_perimeter_sides.append(side)
             if not has_free_side:
-                all_valid = False
+                aparts_to_remove.append(apt)
 
             apt.free_sides = free_sides
             apt.building_perimeter_sides = building_perimeter_sides
-        return all_valid
+        return aparts_to_remove
 
-    def _validate_apartment_number(self, apartments):
+    def _validate_apartment_number(self, apartments, remove_apt_table):
         """
-        Проверяем, что кол-во сгенерированных квартир совпадает с ожидаемым self.total_apartment_number.
+        Проверяем, что кол-во сгенерированных квартир соответствует ожидаемому
+        total_apartment_number за вычетом удаленных квартир.
         """
-        return (len(apartments) == self.total_apartment_number)
+        removed_count = sum(data['removed'] for data in remove_apt_table.values())
+        expected_number = self.total_apartment_number - removed_count
+        return len(apartments) == expected_number
 
     def _calculate_cell_counts(self, cells):
         """Calculates the number of cells to allocate for each apartment type."""
@@ -284,7 +350,7 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(min_cells, int((max_cells - min_cells) * 0.8 + min_cells))
+        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.2 + min_cells), int((max_cells - min_cells) * 0.8 + min_cells))
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
@@ -374,50 +440,6 @@ class Section(GeometricFigure):
                 return None
             return apartment_cells
 
-        # if self.queue_corners_to_allocate is not None and len(self.queue_corners_to_allocate) >= 1:
-        #     start_cell = random.choice(self.queue_corners_to_allocate)
-        #     self.queue_corners_to_allocate.remove(start_cell)  # Удаляем выбранный элемент из списка
-        # elif len(self.initial_corner_cells) > 0:
-        #     start_cell = random.choice(self.initial_corner_cells)
-        #     self.initial_corner_cells.remove(start_cell)  # Удаляем выбранный элемент из списка
-        # elif len([cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
-        #     start_cell = random.choice(
-        #         [cell for cell in remaining_cells if cell['on_perimeter'] and not cell['assigned']])
-        # else:
-        #     return None
-        #
-        # queue = [start_cell]
-        # while queue and len(apartment_cells) < apt_cell_count:
-        #     current_cell = queue.pop(0)
-        #     if current_cell['assigned']:
-        #         continue
-        #
-        #     visited_cells.add(current_cell['id'])
-        #     apartment_cells.append(current_cell)
-        #
-        #     current_cell['assigned'] = True
-        #
-        #     # Получаем не назначенные соседние клетки
-        #     neighbors = [neighbor for neighbor in current_cell['neighbors'] if not neighbor['assigned']]
-        #
-        #     # Сортируем соседей по убыванию количества их свободных соседей
-        #     neighbors_sorted = sorted(
-        #         neighbors,
-        #         key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-        #         reverse=True
-        #     )
-        #
-        #     # Добавляем отсортированных соседей в очередь
-        #     queue.extend(neighbors_sorted)
-        #
-        # # Проверка, удалось ли выделить нужное количество клеток
-        # if len(apartment_cells) < min_cells:
-        #     # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
-        #     for cell in apartment_cells:
-        #         cell['assigned'] = False
-        #     return None
-        #
-        # return apartment_cells
 
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""
@@ -503,3 +525,61 @@ class Section(GeometricFigure):
             total += self.apartment_table[apt_type]['number']
         return total
 
+    def validate_apartment_connectivity(self, apartments: List[Apartment], removed_apartments_table: Dict):
+        """
+        Проверяет, пересекается ли каждая квартира с полигоном оставшихся свободных клеток.
+        Если нет пересечения, квартира удаляется из списка, а в removed_apartments_table
+        добавляется одна удаленная квартира соответствующего типа.
+        """
+        # Генерируем полигон из оставшихся свободных клеток
+        free_cells = [cell['polygon'] for cell in self.cells if not cell['assigned']]
+        if not free_cells:
+            print("Нет свободных клеток для проверки соединенности.")
+            return apartments, removed_apartments_table
+
+        free_area_polygon = unary_union(free_cells)
+
+        # Инициализируем список квартир, которые останутся
+        valid_apartments = []
+
+        for apartment in apartments:
+            if apartment.polygon.intersects(free_area_polygon):
+                # Если квартира пересекается, добавляем ее в список
+                valid_apartments.append(apartment)
+            else:
+                # Если нет пересечения, удаляем квартиру и обновляем таблицу
+                apt_type = apartment.type
+                if apt_type in removed_apartments_table:
+                    removed_apartments_table[apt_type]['removed'] += 1
+                else:
+                    removed_apartments_table[apt_type] = {'removed': 1}
+
+        return valid_apartments, removed_apartments_table
+
+    def has_sufficient_apartments(self, apartments: List[Apartment], removed_apartments_table: Dict) -> bool:
+        """
+        Проверяет, есть ли среди сгенерированных квартир как минимум столько квартир определенного типа,
+        сколько указано в removed_apartments_table.
+
+        Args:
+            apartments (List[Apartment]): Список сгенерированных квартир.
+            removed_apartments_table (Dict): Таблица удаленных квартир с их типами и количеством.
+
+        Returns:
+            bool: True, если у всех типов квартир есть достаточное количество, иначе False.
+        """
+        # Подсчитываем количество квартир каждого типа
+        apartment_counts = {}
+        for apartment in apartments:
+            if apartment.type not in apartment_counts:
+                apartment_counts[apartment.type] = 0
+            apartment_counts[apartment.type] += 1
+
+        # Проверяем, достаточно ли квартир для каждого типа в removed_apartments_table
+        for apt_type, data in removed_apartments_table.items():
+            required_count = data['removed']
+            available_count = apartment_counts.get(apt_type, 0)
+            if available_count < required_count:
+                return False  # Если хотя бы одного типа недостаточно, возвращаем False
+
+        return True  # Если все типы удовлетворяют условиям, возвращаем True

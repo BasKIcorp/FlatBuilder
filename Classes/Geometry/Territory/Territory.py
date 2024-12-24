@@ -123,7 +123,6 @@ class Territory(GeometricFigure):
                 data['error'] = round(abs(expected_percent - data['percent']), 1)  # Абсолютная ошибка
 
             # Добавляем ключ 'Средняя ошибка' для здания
-            building_error = self.total_error[i]
             actual_data['average_error'] = round(sum(self.total_error) / len(self.total_error), 1)
 
             output_tables.append(actual_data)
