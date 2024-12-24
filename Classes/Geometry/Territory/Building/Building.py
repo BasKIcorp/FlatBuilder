@@ -55,7 +55,13 @@ class Building(GeometricFigure):
         floor_patterns = self.create_unique_floor_pattern(floor_tables)
         # Шаг 3: Генерируем этажи
         self._generate_upper_floors(floor_patterns)
-        self._generate_first_floor(self.calc_first_floor_table(floor_patterns[0][0]))  # Используем первый кортеж
+        self.floors.insert(0, Floor(points=self.points,
+                      sections_list=self.sections,
+                      apartment_table=self.apartment_table,
+                      building_polygon=self.polygon))
+        for section in self.floors[0].sections:
+            section.apartments = []
+
 
     def _generate_single_floor(self):
         """Генерация единственного этажа."""
@@ -94,7 +100,7 @@ class Building(GeometricFigure):
 
     def _generate_first_floor(self, first_pattern: Tuple[Dict, int]):
         """Генерация первого этажа на основе первого паттерна."""
-        first_pattern_dict = first_pattern  # Извлекаем первый словарь и игнорируем количество повторений
+        first_pattern_dict = first_pattern[0]  # Извлекаем первый словарь и игнорируем количество повторений
         first_floor = Floor(points=self.points,
                             sections_list=self.sections,
                             apartment_table=first_pattern_dict,
@@ -298,14 +304,7 @@ class Building(GeometricFigure):
 
         return new_floor
 
-    def calc_first_floor_table(self, first_floor_table):
-        for floor in self.floors:
-            for section in floor.sections:
-                if section.removed_apartments_table:
-                    for apt_type, apt_info in section.removed_apartments_table.items():
-                        first_floor_table[apt_type]['number'] += section.removed_apartments_table[apt_type]['removed']
 
-        return first_floor_table
 
 
 
