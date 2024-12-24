@@ -22,22 +22,28 @@ from Classes.Geometry.Territory.Territory import Territory
 # sections_polygons = [
 #     [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
 # ]
+# buildings_polygons = [
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]
+#
+# sections_polygons = [
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]
 buildings_polygons = [
-    [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(0, 0), (35, 0), (35, 27), (0, 27)]
 ]
-
 sections_polygons = [
-    [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(0, 0), (35, 0), (35, 27), (0, 27)]
 ]
 
 # Параметры
-num_floors = 9
+num_floors = 14
 apartment_table = [{
-    'studio': {'area_range': (25, 35), 'percent': 100, 'number': 20},
-    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 18},
+    'studio': {'area_range': (25, 35), 'percent': 100, 'number': 24},
+    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 36},
     '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
     '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 28},
+    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
 }]
 # Исходные данные полигона территории и зданий
 
