@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
         self.clear_button.setVisible(False)
         self.clear_button.clicked.connect(self.clear_painter)
 
-        font.setPointSize(12)
+        font.setPointSize(10.5)
         self.error_text = QLabel("")
         self.error_text.setAlignment(Qt.AlignCenter)
         self.error_text.setFont(font)

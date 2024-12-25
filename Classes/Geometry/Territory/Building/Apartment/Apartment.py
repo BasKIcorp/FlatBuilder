@@ -12,6 +12,7 @@ import time
 from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString, Point
 from shapely.ops import unary_union
 import math
+from shapely import union_all
 
 
 # Класс для квартиры, содержащей комнаты, мокрые зоны и балконы
@@ -36,7 +37,7 @@ class Apartment(GeometricFigure):
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
-        max_iterations = 5
+        max_iterations = 8
         best_plan = None
         best_score = float('inf')
         failure = False
@@ -58,10 +59,12 @@ class Apartment(GeometricFigure):
                             min_cells = 6
                             max_cells = 10
                             room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
+
                         else:
                             min_cells, max_cells = self._get_rooms_cell_range(room_table=room_table, room_number=room_number,
                                                                               cell_size=self.cell_size,
                                                                               room_type=room_type, rooms=rooms)
+
                             # Выделяем ячейки для комнаты
                             room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
                     if not self.aspect_ratio_ok(room_cells) and room_type in ['living_room', 'bedroom']:
@@ -100,6 +103,7 @@ class Apartment(GeometricFigure):
                     room = Room(points=points, room_type=room_type)
                     room.cells = room_cells
                     rooms.append(room)
+                    # rooms = self.post_processing(rooms)
 
 
                 if failure:
@@ -325,3 +329,28 @@ class Apartment(GeometricFigure):
         shorter, longer = side_lengths[0], side_lengths[2]
         ratio = longer / (shorter + 1e-9)
         return ratio <= max_aspect_ratio, ratio
+    #
+    # def post_processing(self, rooms):
+    #     def replace_element(lst, old_value, new_value):
+    #         return [new_value if x == old_value else x for x in lst]
+    #     free_polygon = union_all([cell['polygon'] for cell in self.cells if not cell['assigned']])
+    #     if isinstance(free_polygon, Polygon):
+    #         for room in rooms:
+    #             if room.polygon.intersects(free_polygon):
+    #                 new_polygon = room.polygon.union(free_polygon)
+    #                 points = list(new_polygon.exterior.coords)
+    #                 new_room = Room(points=points,
+    #                                 room_type=room.type)
+    #                 return replace_element(rooms, room, new_room)
+    #     if isinstance(free_polygon, MultiPolygon):
+    #         new_rooms = rooms
+    #         for geom in free_polygon.geoms:
+    #
+    #             for room in rooms:
+    #                 if room.polygon.intersects(geom):
+    #                     new_polygon = room.polygon.union(geom)
+    #                     points = list(new_polygon.exterior.coords)
+    #                     new_room = Room(points=points,
+    #                                     room_type=room.type)
+    #                     new_rooms = replace_element(rooms, room, new_room)
+    #         return new_rooms

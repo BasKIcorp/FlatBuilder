@@ -60,7 +60,7 @@ class Floor(GeometricFigure):
         if not self.sections_list:
             print("Ошибка: Список секций пуст. Невозможно распределить квартиры.")
             return None
-
+        print(self.sections_list)
         total_area = sum(Polygon(points).area for points in self.sections_list)
         section_areas = [Polygon(points).area for points in self.sections_list]
 

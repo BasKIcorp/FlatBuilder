@@ -358,7 +358,7 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.35 + min_cells), int((max_cells - min_cells) * 0.6 + min_cells))
+        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.45 + min_cells), int((max_cells - min_cells) * 0.8 + min_cells))
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
@@ -564,7 +564,6 @@ class Section(GeometricFigure):
             # Проверяем пересечение с self.free_polygon
             if not apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).exterior.touches(free_polygon):
                 outsiders.append(apartment)
-        print(len(outsiders))
         if outsiders:
             return True, outsiders
         return False, outsiders

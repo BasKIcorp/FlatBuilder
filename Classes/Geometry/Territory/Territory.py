@@ -7,7 +7,7 @@ from typing import List, Tuple, Dict
 class Territory(GeometricFigure):
     def __init__(self,
                  building_points: List[List[Tuple[float, float]]],
-                 sections_coords: List[List[Tuple[float, float]]],
+                 sections_coords: List[List[List[Tuple[float, float]]]],
                  num_floors: int,
                  apartment_table: list):
 
@@ -42,7 +42,7 @@ class Territory(GeometricFigure):
         for i, points in enumerate(self.building_points):
             # Создаем здание с распределенной таблицей
             building = Building(points=points,
-                                sections=self.sections_coords,
+                                sections=self.sections_coords[i],
                                 num_floors=self.num_floors,
                                 apartment_table=self.apartment_table[i])
             building.generate_floors()
@@ -163,7 +163,9 @@ class Territory(GeometricFigure):
                 if not threshold_area < total_building_area * 0.6:
                     min_area_to_reduce = threshold_area - total_building_area * 0.6
                     self.messages.append(
-                        f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
+                        f"Пожалуйста, уменьшите кол-во квартир или площадь квартир/\n"
+                        f"увеличьте кол-во этажей или площадь здания.\n"
+                        f"Для размещения при заданных параметров не хватает {min_area_to_reduce} кв.м."
                     )
                     return False  # Планирование невозможно
                 else:

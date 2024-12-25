@@ -20,8 +20,7 @@ class Building(GeometricFigure):
         super().__init__(points)
         self.floors = []  # Список этажей в здании
         self.num_floors = num_floors  # Количество этажей
-        self.sections = [section for section in sections if Polygon(points).contains(Polygon(section) or
-                                                                                     Polygon(points).equals(Polygon(section)))]
+        self.sections = sections
         self.apartment_table = self._clean_apartment_table(apartment_table)
         self.message = None  # Для сообщений об ошибках
 
@@ -64,6 +63,7 @@ class Building(GeometricFigure):
                       apartment_table=self.apartment_table,
                       building_polygon=self.polygon,
                       single_floor=True)
+        print(floor.sections_list)
         floor.generate_floor_planning()
         self.floors.append(floor)
 
