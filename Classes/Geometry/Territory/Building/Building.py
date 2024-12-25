@@ -49,7 +49,7 @@ class Building(GeometricFigure):
         # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
         floor_tables = self._initialize_empty_floor_tables()
         floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
-        if self.num_floors > 2:
+        if self.num_floors >= 2:
             self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
         # Шаг 2: Создаем уникальные паттерны этажей
         floor_patterns = self.create_unique_floor_pattern(floor_tables)
@@ -93,14 +93,28 @@ class Building(GeometricFigure):
             previous_floor = floor
 
     def _generate_first_floor(self, first_pattern: Tuple[Dict, int]):
-        """Генерация первого этажа на основе первого паттерна."""
-        first_pattern_dict, _ = first_pattern  # Извлекаем первый словарь и игнорируем количество повторений
+        """
+        Генерация первого этажа на основе первого паттерна,
+        но при этом обнуляем число квартир (number=0),
+        чтобы этаж был полностью пустым.
+        """
+        base_pattern, _ = first_pattern  # первый словарь и количество повторений
+
+        # Создаём "пустой" паттерн с number=0
+        empty_pattern = {}
+        for apt_type, apt_info in base_pattern.items():
+            new_info = dict(apt_info)
+            new_info["number"] = 0
+            empty_pattern[apt_type] = new_info
+
+        # Создаём этаж, передав пустой паттерн
         first_floor = Floor(points=self.points,
                             sections_list=self.sections,
-                            apartment_table=first_pattern_dict,
+                            apartment_table=empty_pattern,
                             building_polygon=self.polygon)
         first_floor.generate_floor_planning()
-        self.floors.insert(0, first_floor)  # Добавляем первый этаж в начало списка
+        # Ставим этот этаж первым
+        self.floors.insert(0, first_floor)
 
     def _modify_existing_floor_sections(self, floor: Floor, current_pattern: Dict, base_pattern: Dict):
         """
@@ -177,21 +191,12 @@ class Building(GeometricFigure):
             min_area, max_area = apt_info['area_range']
             mean_area = (min_area + max_area) / 2
 
-            if total_number * mean_area <= 0.15 * total_area:
-                floor_tables[0][apt_type]['number'] += total_number
-                continue
-            if self.num_floors > 2:
-                base_number = total_number // (self.num_floors - 1)
-            else:
-                base_number = total_number // self.num_floors
+            base_number = total_number // (self.num_floors - 1)
             remaining_number = total_number
 
             for floor_index in range(1, self.num_floors):
                 floor_tables[floor_index][apt_type]['number'] += base_number
                 remaining_number -= base_number
-            if remaining_number * mean_area <= 0.15 * total_area:
-                floor_tables[0][apt_type]['number'] += remaining_number
-                remaining_number = 0
             if self.num_floors == 2:
                 floor_tables[0][apt_type]['number'] += remaining_number
                 remaining_number = 0

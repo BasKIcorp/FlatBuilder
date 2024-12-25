@@ -123,7 +123,6 @@ class Territory(GeometricFigure):
                 data['error'] = round(abs(expected_percent - data['percent']), 1)  # Абсолютная ошибка
 
             # Добавляем ключ 'Средняя ошибка' для здания
-            building_error = self.total_error[i]
             actual_data['average_error'] = round(sum(self.total_error) / len(self.total_error), 1)
 
             output_tables.append(actual_data)
@@ -161,8 +160,8 @@ class Territory(GeometricFigure):
                 threshold_area = avg_potential_area
                 print(total_building_area)
                 print(threshold_area)
-                if not threshold_area < total_building_area * 0.7:
-                    min_area_to_reduce = threshold_area - total_building_area * 0.7
+                if not threshold_area < total_building_area * 0.6:
+                    min_area_to_reduce = threshold_area - total_building_area * 0.6
                     self.messages.append(
                         f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
                     )
@@ -171,7 +170,7 @@ class Territory(GeometricFigure):
                     continue
             else:
                 allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
-                threshold_area = 0.7 * allocatable_area + 0.5 * total_building_area  # 50% для первого этажа, 70% для остальных
+                threshold_area = 0.7 * allocatable_area
                 if not avg_potential_area < threshold_area:
                     # Шаг 5: Расчет минимальной площади для уменьшения
                     min_area_to_reduce = avg_potential_area - threshold_area
