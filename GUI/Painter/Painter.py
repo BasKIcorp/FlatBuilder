@@ -44,8 +44,7 @@ def shapely_to_qpolygonf(shapely_polygon):
     return QPolygonF([QPointF(x, y) for x, y in shapely_polygon.exterior.coords])
 
 
-def clip_polygon(smaller_qpolygonf, larger_qpolygonf):
-    larger_polygon = qpolygonf_to_shapely(larger_qpolygonf)
+def clip_polygon(smaller_qpolygonf, larger_polygon):
     smaller_polygon = qpolygonf_to_shapely(smaller_qpolygonf)
 
     clipped_polygon = smaller_polygon.intersection(larger_polygon)
@@ -186,6 +185,10 @@ class Painter(QGraphicsView):
         self.window_items = []
         self.apt_areas = []
         self.room_areas = []
+        self.preview_point_1 = None
+        self.preview_point_2 = None
+        self.preview_point_3 = None
+        self.preview_point_4 = None
 
         self.setTransform(QTransform().scale(self.default_zoom, self.default_zoom))
         self.scene.selectionChanged.connect(self.on_selection_changed)
@@ -247,6 +250,10 @@ class Painter(QGraphicsView):
         self.window_items = []
         self.apt_areas = []
         self.room_areas = []
+        self.preview_point_1 = None
+        self.preview_point_2 = None
+        self.preview_point_3 = None
+        self.preview_point_4 = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
@@ -263,6 +270,21 @@ class Painter(QGraphicsView):
                     self.add_point(scene_pos.x(), scene_pos.y())
                     self.update_shape()
                     self.preview_point = None
+                elif self.preview_point_1:
+                    self.scene.removeItem(self.preview_point_1)
+                    self.scene.removeItem(self.preview_point_2)
+                    self.scene.removeItem(self.preview_point_3)
+                    self.scene.removeItem(self.preview_point_4)
+                    scene_pos = self.mapToScene(event.pos())
+                    self.add_point(scene_pos.x(), scene_pos.y())
+                    self.add_point(scene_pos.x() + 20, scene_pos.y())
+                    self.add_point(scene_pos.x() + 20, scene_pos.y() + 20)
+                    self.add_point(scene_pos.x(), scene_pos.y() + 20)
+                    self.update_shape()
+                    self.preview_point_1 = None
+                    self.preview_point_2 = None
+                    self.preview_point_3 = None
+                    self.preview_point_4 = None
                 elif self.preview_rect:
                     rect_pos = self.preview_rect.pos()
                     if self.mode == "elevator":
@@ -302,6 +324,13 @@ class Painter(QGraphicsView):
             elif self.preview_point:
                 mouse_pos = self.mapToScene(event.pos())
                 self.preview_point.setPos(mouse_pos)
+            elif self.preview_point_1:
+                mouse_pos = self.mapToScene(event.pos())
+                self.preview_point_1.setPos(mouse_pos)
+                self.preview_point_2.setPos(mouse_pos.x() + 20, mouse_pos.y())
+                self.preview_point_3.setPos(mouse_pos.x() + 20, mouse_pos.y() + 20)
+                self.preview_point_4.setPos(mouse_pos.x(), mouse_pos.y() + 20)
+
             super().mouseMoveEvent(event)
         else:
             pass
@@ -375,12 +404,26 @@ class Painter(QGraphicsView):
     def add_section(self):
         self.cutting_mode = True
 
+    def add_preview_building(self):
+        cursor_pos = QCursor.pos()  # Получаем позицию курсора в глобальных координатах
+        scene_pos = self.mapToScene(self.mapFromGlobal(cursor_pos))  # Преобразуем в координаты сцены
+
+        x, y = scene_pos.x(), scene_pos.y()
+        self.preview_point_1 = MovablePoint(x, y, self.radius, self.point_id_counter, self.polygon, self, preview=True)
+        self.preview_point_2 = MovablePoint(x + 20, y, self.radius, self.point_id_counter, self.polygon, self, preview=True)
+        self.preview_point_3 = MovablePoint(x + 20, y + 20, self.radius, self.point_id_counter, self.polygon, self, preview=True)
+        self.preview_point_4 = MovablePoint(x, y + 20, self.radius, self.point_id_counter, self.polygon, self, preview=True)
+        self.scene.addItem(self.preview_point_1)
+        self.scene.addItem(self.preview_point_2)
+        self.scene.addItem(self.preview_point_3)
+        self.scene.addItem(self.preview_point_4)
+
     def add_building(self):
         self.all_points.append(self.points)
         self.polygons.update({self.polygon: self.points})
         self.points = []
         self.polygon = None
-        self.add_preview_point()
+        self.add_preview_building()
 
     def update_shape(self):
         center = {'x': 0, 'y': 0}
@@ -451,9 +494,12 @@ class Painter(QGraphicsView):
                     for i in range(len(x)):
                         section.append((x[i], y[i]))
                     sections.append(section)
-        print(buildings)
         if not self.cuts:
             sections = buildings
+        self.sections = sections
+        print(buildings)
+        for section in sections:
+            print("Секция: ", section)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
         worker = BuildingGenerator(territory)
@@ -502,14 +548,16 @@ class Painter(QGraphicsView):
         for i in range(len(self.floors)):
             building = self.floors[i]
             floor = building[floor_num]
+            # print(floor.polygon.exterior)
             for section in floor.sections:
+                print(section.polygon.exterior)
                 for apt in section.apartments:
                     poly = apt.polygon
                     x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
-                    outer_polygon = list(self.polygons.keys())[i].polygon()
-                    polygon = clip_polygon(polygon, outer_polygon)
+                    # outer_polygon = list(self.polygons.keys())[i].polygon()
+                    polygon = clip_polygon(polygon, section.polygon)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
@@ -537,12 +585,26 @@ class Painter(QGraphicsView):
                     # area_text.setZValue(1)
                     # self.scene.addItem(area_text)
                     # self.apt_areas.append(area_text)
+
+                    for item in self.window_items:
+                        self.scene.removeItem(item)
+                    self.window_items.clear()
+                    for window in apt.windows:
+                        window_linestring = window.line
+                        x1, y1 = window_linestring.coords[0]
+                        x2, y2 = window_linestring.coords[1]
+
+                        gray_line = QGraphicsLineItem(QLineF(QPointF(x1, y1), QPointF(x2, y2)))
+                        gray_line.setPen(QPen(Qt.lightGray, 0.3))
+                        self.scene.addItem(gray_line)
+
+                        self.window_items.append(gray_line)
                     for room in apt.rooms:
                         x, y = room.polygon.exterior.xy
                         poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                         polygon = QPolygonF(poly_points)
-                        outer_polygon = list(self.polygons.keys())[i].polygon()
-                        polygon = clip_polygon(polygon, outer_polygon)
+                        # outer_polygon = list(self.polygons.keys())[i].polygon()
+                        polygon = clip_polygon(polygon, section.polygon)
                         area = calculate_polygon_area(polygon)
                         filled_shape = QGraphicsPolygonItem(polygon)
                         filled_shape.setToolTip(f"Площадь: {area}м^2")
@@ -574,16 +636,4 @@ class Painter(QGraphicsView):
                                 for area in self.apt_areas:
                                     self.scene.removeItem(area)
                             # self.scene.addItem(area_text)
-                        for item in self.window_items:
-                            self.scene.removeItem(item)
-                        self.window_items.clear()
-                        for window in apt.windows:
-                            window_linestring = window.line
-                            x1, y1 = window_linestring.coords[0]
-                            x2, y2 = window_linestring.coords[1]
 
-                            gray_line = QGraphicsLineItem(QLineF(QPointF(x1, y1), QPointF(x2, y2)))
-                            gray_line.setPen(QPen(Qt.lightGray, 0.3))
-                            self.scene.addItem(gray_line)
-
-                            self.window_items.append(gray_line)

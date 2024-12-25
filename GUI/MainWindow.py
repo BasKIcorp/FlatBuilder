@@ -1,10 +1,25 @@
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIntValidator, QFont, QPainter
+from PyQt5.QtCore import Qt, QRectF
+from PyQt5.QtGui import QIntValidator, QFont, QPainter, QPen, QColor, QPageLayout
 from PyQt5.QtPrintSupport import QPrinter
 from PyQt5.QtWidgets import QGraphicsScene, QMainWindow, QPushButton, QWidget, QVBoxLayout, QFrame, \
     QSplitter, QTableWidgetItem, QTableWidget, QLineEdit, QFileDialog, QLabel, QHBoxLayout, QComboBox, QDialog, \
-    QCheckBox
+    QCheckBox, QGraphicsPolygonItem, QGraphicsRectItem, QGraphicsTextItem
 from GUI.Painter.Painter import Painter
+
+apt_colors = {
+    'studio': '#fa6b6b',
+    '1 room': '#6dd170',
+    '2 room': '#6db8d1',
+    '3 room': '#ed975a',
+    '4 room': '#ba7ed9'
+}
+room_colors = {
+    'kitchen': '#FF9999',
+    'bathroom': '#99FF99',
+    'hall': '#9999FF',
+    'living room': '#FFCC99',
+    'bedroom': '#CC99FF',
+}
 
 
 class MainWindow(QMainWindow):
@@ -462,6 +477,9 @@ class MainWindow(QMainWindow):
                 self.output_error[row].setText(str(error[row]))
 
             self.output_av_error.setText(str(average_error))
+            if int(self.floor_edit.text()) > 1:
+                self.combo.setCurrentIndex(1)
+                self.graphics_view.show_floor(1, self.checkbox.isChecked())
 
     def generate_clicked(self):
         apartment_tables = []
@@ -528,6 +546,8 @@ class MainWindow(QMainWindow):
                             self.scene.removeItem(apt_area)
                         for room_area in self.graphics_view.room_areas:
                             self.scene.removeItem(room_area)
+                        for window in self.graphics_view.window_items:
+                            self.scene.removeItem(window)
                     self.generate_button.setDisabled(True)
                     self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")
@@ -540,11 +560,75 @@ class MainWindow(QMainWindow):
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(file_path)
+            printer.setPageOrientation(QPageLayout.Portrait)
 
             painter = QPainter(printer)
-            self.graphics_view.scene.render(painter)
+
+            total_floors = int(self.floor_edit.text())
+            margin = 600
+            spacing_between_parts = 1
+            size = 5000
+
+            for i in range(total_floors):
+                if i > 0:
+                    printer.newPage()
+
+                font = QFont("Arial", 15)
+                painter.setFont(font)
+                painter.drawText(4300, 100, f"Этаж {i+1}")
+                y_offset = 200
+                font = QFont("Arial", 8)
+                painter.setFont(font)
+
+                x_start = 0
+                y_start = y_offset + 50
+                box_size = 60
+                spacing = 100
+
+                painter.drawText(x_start, y_start, "Типы квартир")
+                y_start += spacing
+                for label, color in apt_colors.items():
+                    painter.setBrush(QColor(color))
+                    painter.setPen(Qt.NoPen)
+                    painter.drawRect(x_start, y_start, box_size, box_size)
+                    painter.setPen(Qt.black)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawText(x_start + box_size + spacing, y_start + box_size - 5, label)
+                    y_start += box_size + spacing
+
+                self.graphics_view.show_floor(i, False)
+                scene_rect = self.graphics_view.scene.itemsBoundingRect()
+                painter.save()
+                painter.translate(10, 2 * margin)
+                self.graphics_view.scene.render(painter, QRectF(0, 0, size, size),
+                                                scene_rect)
+                painter.restore()
+
+                x_start = 0
+                y_start = 2 * margin + size + spacing_between_parts + y_offset + 50
+
+                painter.drawText(x_start, y_start, "Типы комнат")
+                y_start += spacing
+                for label, color in room_colors.items():
+                    painter.setBrush(QColor(color))
+                    painter.setPen(Qt.NoPen)
+                    painter.drawRect(x_start, y_start, box_size, box_size)
+                    painter.setPen(Qt.black)
+                    painter.setBrush(Qt.NoBrush)
+                    painter.drawText(x_start + box_size + spacing, y_start + box_size - 5, label)
+                    y_start += box_size + spacing
+
+                self.graphics_view.show_floor(i, True)
+                painter.save()
+                painter.translate(10,
+                                  y_start + y_offset)
+                self.graphics_view.scene.render(painter, QRectF(0, 0, size, size),
+                                                scene_rect)
+                painter.restore()
+
             painter.end()
             print(f"Saved as {file_path}")
+
 
     def clear_painter(self):
         self.graphics_view.scene.clear()
