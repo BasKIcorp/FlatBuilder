@@ -493,6 +493,7 @@ class Painter(QGraphicsView):
                     x, y = section_polygon.exterior.xy
                     for i in range(len(x)):
                         section.append((x[i], y[i]))
+                    section = [section]
                     sections.append(section)
         if not self.cuts:
             sections = buildings

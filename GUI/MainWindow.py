@@ -181,7 +181,7 @@ class MainWindow(QMainWindow):
         self.clear_button.setVisible(False)
         self.clear_button.clicked.connect(self.clear_painter)
 
-        font.setPointSize(10.5)
+        font.setPointSize(10)
         self.error_text = QLabel("")
         self.error_text.setAlignment(Qt.AlignCenter)
         self.error_text.setFont(font)
@@ -557,6 +557,13 @@ class MainWindow(QMainWindow):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf);;All Files (*)")
 
         if file_path:
+            previous_floor = self.combo.currentIndex()
+            self.error_text.setText("Сохранение...")
+            self.generate_button.setDisabled(True)
+            self.clear_button.setDisabled(True)
+            self.save_button.setDisabled(True)
+            self.elevator_button.setDisabled(True)
+            self.stairs_button.setDisabled(True)
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(file_path)
@@ -596,12 +603,19 @@ class MainWindow(QMainWindow):
                     painter.drawText(x_start + box_size + spacing, y_start + box_size - 5, label)
                     y_start += box_size + spacing
 
-                self.graphics_view.show_floor(i, False)
                 scene_rect = self.graphics_view.scene.itemsBoundingRect()
+                # page_width = printer.pageRect(QPrinter.DevicePixel).width()
+                # print(page_width)
+                scene_width = self.graphics_view.width() # Убедимся, что ширина сцены корректно преобразована
+                # print(scene_width)
+                #
+                # # Рассчитываем смещение для центрирования
+                # x_offset = (page_width - scene_width) / 2
+                x_offset = 500
+                self.graphics_view.show_floor(i, False)
                 painter.save()
-                painter.translate(10, 2 * margin)
-                self.graphics_view.scene.render(painter, QRectF(0, 0, size, size),
-                                                scene_rect)
+                painter.translate(x_offset, 2 * margin)  # Применяем центрирование по X и отступ по Y
+                self.graphics_view.scene.render(painter, QRectF(0, 0, scene_width, scene_rect.height()), scene_rect)
                 painter.restore()
 
                 x_start = 0
@@ -620,14 +634,20 @@ class MainWindow(QMainWindow):
 
                 self.graphics_view.show_floor(i, True)
                 painter.save()
-                painter.translate(10,
-                                  y_start + y_offset)
+                painter.translate(x_offset, y_start)
                 self.graphics_view.scene.render(painter, QRectF(0, 0, size, size),
                                                 scene_rect)
                 painter.restore()
 
             painter.end()
             print(f"Saved as {file_path}")
+            self.generate_button.setDisabled(False)
+            self.clear_button.setDisabled(False)
+            self.save_button.setDisabled(False)
+            self.elevator_button.setDisabled(False)
+            self.stairs_button.setDisabled(False)
+            self.error_text.setText("")
+            self.graphics_view.show_floor(previous_floor, self.checkbox.isChecked())
 
 
     def clear_painter(self):
