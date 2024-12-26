@@ -1,7 +1,6 @@
 from Classes.Geometry.GeometricFigure import GeometricFigure
 from Classes.Geometry.Territory.Building.Floor.Section import Section
 from shapely.geometry import Polygon
-from shapely.ops import unary_union
 from typing import List, Tuple, Dict
 import random
 from math import floor

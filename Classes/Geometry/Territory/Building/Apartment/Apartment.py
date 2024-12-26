@@ -70,14 +70,14 @@ class Apartment(GeometricFigure):
                     if not self.aspect_ratio_ok(room_cells) and room_type in ['living_room', 'bedroom']:
                         failure = True
                         break
-                    room_polygon = unary_union([cell['polygon'] for cell in room_cells])
+                    room_polygon = union_all([cell['polygon'] for cell in room_cells])
                     rectangular_room_polygon = room_polygon.envelope
                     if rectangular_room_polygon.area <= max_cells:
                         for cell in self.cells:
                             if not cell['assigned'] and rectangular_room_polygon.contains(cell['polygon']):
                                 room_cells.append(cell)
                                 cell['assigned'] = True
-                        rectangular_room_polygon = unary_union([cell['polygon'] for cell in room_cells])
+                        rectangular_room_polygon = union_all([cell['polygon'] for cell in room_cells])
                         if isinstance(rectangular_room_polygon, Polygon):
                             points = list(rectangular_room_polygon.exterior.coords)
                         elif isinstance(rectangular_room_polygon, MultiPolygon):
@@ -86,7 +86,7 @@ class Apartment(GeometricFigure):
                             continue
                     else:
                         for i in range(3):
-                            new_room_polygon = unary_union([cell['polygon'] for cell in room_cells[:(-1-i)]])
+                            new_room_polygon = union_all([cell['polygon'] for cell in room_cells[:(-1-i)]])
                             if new_room_polygon.area == room_polygon.envelope.area:
                                 room_polygon = new_room_polygon.copy()
                                 for cell in room_cells[(-1-i):]:

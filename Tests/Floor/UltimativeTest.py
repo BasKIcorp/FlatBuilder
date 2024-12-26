@@ -37,13 +37,13 @@ sections_polygons = [[
 # ]]
 
 # Параметры
-num_floors = 5
+num_floors = 7
 apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
-    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 36},
+    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 22},
     '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
     '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
+    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 14},
 }]
 
 
@@ -55,7 +55,13 @@ apartment_colors = {
     '3 room': 'pink',
     '4 room': 'purple'
 }
-
+room_colors = {
+    'kitchen': '#FF9999',
+    'bathroom': '#99FF99',
+    'hall': '#9999FF',
+    'living room': '#FFCC99',
+    'bedroom': '#CC99FF',
+}
 # Создание объекта территории
 territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table)
 territory.generate_building_plannings()
@@ -116,7 +122,7 @@ def plot_floor(ax, floor, title):
             # Рисуем комнаты внутри квартиры
             for room in apartment.rooms:
                 room_polygon = Polygon(room.points)
-                color = apartment_colors.get(apartment.type, 'gray')  # Цвет комнаты зависит от типа квартиры
+                color = room_colors.get(room.type, 'gray')  # Цвет комнаты зависит от типа квартиры
                 rx, ry = room_polygon.exterior.xy
                 ax.fill(rx, ry, color=color, alpha=0.6)  # Заливка комнаты
                 ax.plot(rx, ry, color='black', linewidth=0.5)  # Тонкий контур комнаты
@@ -129,10 +135,16 @@ def plot_floor(ax, floor, title):
                 color='black', fontsize=8, ha='center', va='center', weight='bold'
             )
             apartment_number += 1  # Увеличиваем номер квартиры
+            for cell in section.otladka:
+                ix, iy = cell['polygon'].exterior.xy
+                ax.fill(ix, iy, color='black', alpha=0.7)
 
         # Добавляем контур секции
         cx, cy = section.polygon.exterior.xy
         ax.plot(cx, cy, color='black', linewidth=2)  # Контур секции
+
+
+
 
 
 # Построение графиков для каждого этажа

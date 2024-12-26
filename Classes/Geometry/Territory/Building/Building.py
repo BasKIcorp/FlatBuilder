@@ -183,12 +183,10 @@ class Building(GeometricFigure):
         """
         Выполняет первичное распределение квартир по этажам.
         """
-        total_area = Polygon(self.points).area
 
         for apt_type, apt_info in self.apartment_table_copy.items():  # Используем копию
             total_number = apt_info['number']
             min_area, max_area = apt_info['area_range']
-            mean_area = (min_area + max_area) / 2
             if self.num_floors >= 2:
                 base_number = total_number // (self.num_floors - 1)
             else:
