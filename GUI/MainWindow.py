@@ -611,11 +611,11 @@ class MainWindow(QMainWindow):
                 #
                 # # Рассчитываем смещение для центрирования
                 # x_offset = (page_width - scene_width) / 2
-                x_offset = 500
+                x_offset = 2500
                 self.graphics_view.show_floor(i, False)
                 painter.save()
                 painter.translate(x_offset, 2 * margin)  # Применяем центрирование по X и отступ по Y
-                self.graphics_view.scene.render(painter, QRectF(0, 0, scene_width, scene_rect.height()), scene_rect)
+                self.graphics_view.scene.render(painter, QRectF(0, 0, size, size), scene_rect)
                 painter.restore()
 
                 x_start = 0
@@ -670,6 +670,8 @@ class MainWindow(QMainWindow):
         self.combo.setVisible(False)
         self.output_table.setVisible(False)
         self.output_label.setVisible(False)
+        self.graphics_view.room_legend_widget.setVisible(False)
+        self.graphics_view.apt_legend_widget.setVisible(False)
         self.done = False
 
     def show_rectangle_dialog(self, mode):

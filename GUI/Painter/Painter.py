@@ -482,6 +482,8 @@ class Painter(QGraphicsView):
                 points_for_sections.append((int(point.get_position()[0]), int(point.get_position()[1])))
                 building.append((int(point.get_position()[0]), int(point.get_position()[1])))
             buildings.append(building)
+        for building in buildings:
+            sections_per_building = []
             if self.cuts:
                 polygon = Polygon(building)
                 cuts = []
@@ -493,10 +495,12 @@ class Painter(QGraphicsView):
                     x, y = section_polygon.exterior.xy
                     for i in range(len(x)):
                         section.append((x[i], y[i]))
-                    section = [section]
-                    sections.append(section)
+                    sections_per_building.append(section)
+            if sections_per_building:
+                sections.append(sections_per_building)
         if not self.cuts:
-            sections = buildings
+            for building in buildings:
+                sections.append([building])
         self.sections = sections
         print(buildings)
         for section in sections:
