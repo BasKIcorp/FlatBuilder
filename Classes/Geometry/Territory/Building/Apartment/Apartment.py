@@ -37,7 +37,7 @@ class Apartment(GeometricFigure):
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
-        max_iterations = 8
+        max_iterations = 20
         best_plan = None
         best_score = float('inf')
         failure = False
@@ -67,9 +67,10 @@ class Apartment(GeometricFigure):
 
                             # Выделяем ячейки для комнаты
                             room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
-                    if not self.aspect_ratio_ok(room_cells) and room_type in ['living_room', 'bedroom']:
+                    if not self.aspect_ratio_ok(room_cells) and room_type in ['living room', 'bedroom']:
                         failure = True
                         break
+
                     room_polygon = union_all([cell['polygon'] for cell in room_cells])
                     rectangular_room_polygon = room_polygon.envelope
                     if rectangular_room_polygon.area <= max_cells:
@@ -115,18 +116,18 @@ class Apartment(GeometricFigure):
                 best_score = total_error
                 best_plan = rooms
 
+            if sum(room.area for room in rooms) == self.area:
+                self.rooms = rooms
+                self._generate_windows()
+                return
 
         self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
         if self.rooms:
             self._generate_windows()
+            return
         if not self.rooms:
             self.messages.append('Не нашел планировку на уровне квартир')
 
-    from shapely.geometry import LineString, MultiLineString
-
-    from shapely.geometry import LineString, MultiLineString
-
-    from shapely.geometry import LineString, MultiLineString
 
     def _generate_windows(self):
         """Генерирует окна для комнат на внешних сторонах здания."""
@@ -287,18 +288,28 @@ class Apartment(GeometricFigure):
                     cell_for_new_corner['is_corner'] = True  # Reset is_corner before checking
                     corner_cells.append(cell_for_new_corner)
 
-        if room_type in ['living_room', 'bedroom']:
-            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
-            if return_cells:
-                return random.choice(return_cells)
-
-        elif room_type == 'kitchen':
-            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
+        if room_type in ['living room', 'bedroom']:
+            return_cells = [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon)
+                            or cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon)]
             if return_cells:
                 return random.choice(return_cells)
             elif corner_cells:
                 return random.choice(corner_cells)
 
+        elif room_type == 'kitchen':
+            return_cells = [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon.exterior)
+                            or cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon)]
+            if return_cells:
+                return random.choice(return_cells)
+            elif corner_cells:
+                return random.choice(corner_cells)
+
+        elif room_type == 'bathroom':
+            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
+            if return_cells:
+                return random.choice(return_cells)
+            elif corner_cells:
+                return random.choice(corner_cells)
         # Если corner_cells пуст, используем любые свободные клетки на периметре
         if not corner_cells:
             available_cells = [cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']]

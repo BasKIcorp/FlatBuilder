@@ -6,12 +6,13 @@ from Classes.Geometry.Territory.Building.Apartment.Apartment import Apartment
 from Classes.Geometry.Territory.Building.Elevator import Elevator
 from Classes.Geometry.Territory.Building.Stair import Stair
 from Classes.Geometry.Territory.RLAgent import RLAgent
-from shapely.geometry import Polygon, LineString, MultiPolygon
+from shapely.geometry import Polygon, LineString, MultiPolygon, Point
 from shapely import union_all
 import random
 from typing import List, Tuple, Dict
 import time
 import copy
+from shapely.affinity import translate
 
 
 class Section(GeometricFigure):
@@ -30,6 +31,8 @@ class Section(GeometricFigure):
         self.agent = RLAgent()
         self.initial_corner_cells = []
         self.otladka = []
+        self.simple_plan = False
+        self.temporary_cells = []
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -41,10 +44,9 @@ class Section(GeometricFigure):
         if not self.apartment_table:
             return
         # Create the cell grid once
-
         for iteration in range(max_iterations):
             print(f"Итерация {iteration}")
-            if best_plan and iteration % 5 == 0:
+            if best_plan and iteration % 2 == 0:
                 self.apartments = best_plan
                 if not self.apartments:
                     print("Не нашел планировку")
@@ -55,6 +57,8 @@ class Section(GeometricFigure):
                     apt._process_cells()
                     apt.generate_apartment_planning()
                 break
+            if not best_plan and iteration == 10:
+                self.simple_plan = True
             # Reset the cell assignments between iterations
             self.cells = None
             self.check_and_create_cell_grid(cell_size=1.0)
@@ -72,7 +76,7 @@ class Section(GeometricFigure):
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
 
-            if not self._validate_apartment_number(apartments):
+            if not self._validate_apartment_number(apartments) and not self.simple_plan:
                 print('not num')
                 # Если неверное кол-во, откатываемся
                 for apt in apartments:
@@ -190,7 +194,7 @@ class Section(GeometricFigure):
             apartments.append(apartment)
             fail = False
             has_outsiders, outsiders = self.validate_apartment_connectivity(apartments)
-            if has_outsiders:
+            if has_outsiders and not self.simple_plan:
                 self._update_cell_properties(apartment_cells)
                 for cell in apartment.cells:
                     cell['assigned'] = False
@@ -328,6 +332,8 @@ class Section(GeometricFigure):
 
         if self.queue_corners_to_allocate:
             temp_apartment_cells = []
+            # self.process_corner_cell(self.queue_corners_to_allocate[-1], apartments)
+            # print(len(self.temporary_cells))
             queue = [self.queue_corners_to_allocate.pop()]
             while queue and len(temp_apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
@@ -345,8 +351,7 @@ class Section(GeometricFigure):
                 # Сортируем соседей по убыванию количества их свободных соседей
                 neighbors_sorted = sorted(
                     neighbors,
-                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-                    reverse=True
+                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']])
                 )
 
                 # Добавляем отсортированных соседей в очередь
@@ -377,8 +382,7 @@ class Section(GeometricFigure):
                 # Сортируем соседей по убыванию количества их свободных соседей
                 neighbors_sorted = sorted(
                     neighbors,
-                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-                    reverse=True
+                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']])
                 )
                 # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
@@ -411,8 +415,7 @@ class Section(GeometricFigure):
                 # Сортируем соседей по убыванию количества их свободных соседей
                 neighbors_sorted = sorted(
                     neighbors,
-                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-                    reverse=True
+                    key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']])
                 )
                 # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
@@ -583,3 +586,70 @@ class Section(GeometricFigure):
             return initial_cells
 
         return apartment_cells
+
+    def process_corner_cell(self, queue_cell, apartments):
+        """
+        Обрабатывает заданную клетку из queue_corners_to_allocate.
+        Расширяет сторону последнего apartment, к которой клетка прилегает, и отмечает подходящие клетки.
+
+        Args:
+            queue_cell (dict): Клетка из queue_corners_to_allocate.
+            apartments (list): Список apartments.
+            assigned_cells (list): Список уже назначенных клеток.
+        """
+        # Получаем последний apartment
+        if not apartments:
+            return
+        if self.temporary_cells:
+            for cell in self.temporary_cells:
+                cell['assigned'] = False
+            self.temporary_cells.clear()
+        last_apartment = apartments[-1]
+        apartment_polygon = last_apartment.polygon.simplify(tolerance=0.01, preserve_topology=True)
+
+        # Проверяем стороны квартиры
+        apartment_sides = [
+            LineString([apartment_polygon.exterior.coords[i], apartment_polygon.exterior.coords[i + 1]])
+            for i in range(len(apartment_polygon.exterior.coords) - 1)
+        ]
+
+        # Находим сторону, к которой прилегает клетка
+        cell_polygon = queue_cell['polygon']
+        touching_side = None
+        for side in apartment_sides:
+            if cell_polygon.intersects(side) and isinstance(intersection(side, self.polygon), LineString):
+                touching_side = side
+                break
+        print(touching_side)
+        if not touching_side:
+            return  # Нет подходящей стороны
+
+        # Расширяем найденную сторону на 3 единицы в обе стороны
+        coords = list(touching_side.coords)
+        start, end = Point(coords[0]), Point(coords[1])
+        direction = (end.x - start.x, end.y - start.y)
+
+        # Вычисляем расширенные точки
+        expanded_start = translate(start, xoff=-3 * direction[0], yoff=-3 * direction[1])
+        expanded_end = translate(end, xoff=3 * direction[0], yoff=3 * direction[1])
+
+        expanded_side = LineString([expanded_start, expanded_end])
+
+        # Вычисляем вектор противоположного направления относительно клетки
+        cell_center = cell_polygon.centroid
+        side_center = touching_side.centroid
+        relative_direction = (cell_center.x - side_center.x, cell_center.y - side_center.y)
+
+        # Инвертируем вектор направления
+        opposite_direction = (-relative_direction[0], -relative_direction[1])
+
+        # Находим клетки, которые касаются expanded_side и находятся в нужном направлении
+        for cell in [c for c in self.cells if not c['assigned'] and c['polygon'].intersects(touching_side)]:
+            neighbor_center = cell['polygon'].centroid
+            vector_to_neighbor = (neighbor_center.x - cell_center.x, neighbor_center.y - cell_center.y)
+
+            # Проверяем направление вектора
+            if vector_to_neighbor[0] * opposite_direction[0] + vector_to_neighbor[1] * opposite_direction[1] > 0:
+                if cell['polygon'].intersects(expanded_side):
+                    cell['assigned'] = True
+                    self.temporary_cells.append(cell)

@@ -56,11 +56,11 @@ apartment_colors = {
     '4 room': 'purple'
 }
 room_colors = {
-    'kitchen': '#FF9999',
-    'bathroom': '#99FF99',
-    'hall': '#9999FF',
-    'living room': '#FFCC99',
-    'bedroom': '#CC99FF',
+    'kitchen': 'red',
+    'bathroom': 'green',
+    'hall': 'blue',
+    'living room': 'purple',
+    'bedroom': 'gray',
 }
 # Создание объекта территории
 territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table)
