@@ -175,39 +175,13 @@ class Section(GeometricFigure):
 
             # Создаем полигон для квартиры
             apartment_polygon = union_all([cell['polygon'] for cell in apartment_cells])
-            rectangular_apartment_polygon = apartment_polygon.envelope
-
-            if rectangular_apartment_polygon.area < max_cells:
-                for cell in remaining_cells:
-                    if not cell['assigned'] and rectangular_apartment_polygon.contains(cell['polygon']):
-                        apartment_cells.append(cell)
-                        cell['assigned'] = True
+            if isinstance(apartment_polygon, Polygon):
+                points = list(apartment_polygon.exterior.coords)
+            elif isinstance(apartment_polygon, MultiPolygon):
+                for cell in apartment_cells:
+                    cell['assigned'] = False
                 remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                rectangular_apartment_polygon = union_all([cell['polygon'] for cell in apartment_cells])
-                if isinstance(rectangular_apartment_polygon, Polygon):
-                    points = list(rectangular_apartment_polygon.exterior.coords)
-                elif isinstance(rectangular_apartment_polygon, MultiPolygon):
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                    continue
-            else:
-                for i in range(3):
-                    new_apartment_polygon = union_all([cell['polygon'] for cell in apartment_cells[:(-1 - i)]])
-                    if new_apartment_polygon.area == apartment_polygon.envelope.area:
-                        apartment_polygon = new_apartment_polygon.copy()
-                        for cell in apartment_cells[(-1 - i):]:
-                            cell['assigned'] = False
-                        apartment_cells = apartment_cells[(-1 - i):]
-                        break
-                if isinstance(apartment_polygon, Polygon):
-                    points = list(apartment_polygon.boundary.coords)
-                elif isinstance(apartment_polygon, MultiPolygon):
-                    for cell in apartment_cells:
-                        cell['assigned'] = False
-                    remaining_cells = [cell for cell in remaining_cells if not cell['assigned']]
-                    continue
-
+                continue
             # Создаем объект Apartment
             apartment = Apartment(points=points, apt_type=apt_type, building_polygon=self.building_polygon)
             apartment.cells = apartment_cells
@@ -358,11 +332,12 @@ class Section(GeometricFigure):
         Cells with more free neighbors are prioritized.
         """
 
-        apt_cell_count = random.randint(int((max_cells - min_cells) * 0.45 + min_cells), int((max_cells - min_cells) * 0.8 + min_cells))
+        apt_cell_count = random.randint(min_cells, max_cells)
 
         # Выбираем случайную стартовую клетку из доступных угловых клеток
         apartment_cells = []
         visited_cells = set()
+        best_variants = []
         if self.queue_corners_to_allocate:
             temp_apartment_cells = []
             queue = [self.queue_corners_to_allocate.pop()]
@@ -388,13 +363,22 @@ class Section(GeometricFigure):
 
                 # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
-            # Проверка, удалось ли выделить нужное количество клеток
-            if len(temp_apartment_cells) < min_cells:
-                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+
+                if min_cells <= len(apartment_cells) <= max_cells:
+                    apt_polygon = union_all([cell['polygon'] for cell in temp_apartment_cells])
+                    if self._rectangularity_score(apt_polygon) == 0:
+                        best_variants.append(apartment_cells)
+
+            if best_variants:
+                chosen_cells = random.choice(best_variants)
+                best_variants.remove(chosen_cells)
                 for cell in temp_apartment_cells:
-                    cell['assigned'] = False
-                return None
-            return temp_apartment_cells
+                    if cell not in best_variants:
+                        cell['assigned'] = False
+                return chosen_cells
+            else:
+                return temp_apartment_cells
+
 
         elif len([cell for cell in self.initial_corner_cells if not cell['assigned']]) > 0:
             queue = [random.choice(self.initial_corner_cells)]
@@ -419,13 +403,21 @@ class Section(GeometricFigure):
                 )
                 # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
-            # Проверка, удалось ли выделить нужное количество клеток
-            if len(apartment_cells) < min_cells:
-                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+
+                if min_cells <= len(apartment_cells) <= max_cells:
+                    apt_polygon = union_all([cell['polygon'] for cell in apartment_cells])
+                    if self._rectangularity_score(apt_polygon) == 0:
+                        best_variants.append(apartment_cells)
+
+            if best_variants:
+                chosen_cells = random.choice(best_variants)
+                best_variants.remove(chosen_cells)
                 for cell in apartment_cells:
-                    cell['assigned'] = False
-                return None
-            return apartment_cells
+                    if cell not in best_variants:
+                        cell['assigned'] = False
+                return chosen_cells
+            else:
+                return apartment_cells
 
         elif len([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
             queue = [random.choice([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']])]
@@ -450,13 +442,20 @@ class Section(GeometricFigure):
                 )
                 # Добавляем отсортированных соседей в очередь
                 queue.extend(neighbors_sorted)
-            # Проверка, удалось ли выделить нужное количество клеток
-            if len(apartment_cells) < min_cells:
-                # Если выделено меньше минимально необходимого, снимаем назначение и возвращаем None
+                if min_cells <= len(apartment_cells) <= max_cells:
+                    apt_polygon = union_all([cell['polygon'] for cell in apartment_cells])
+                    if self._rectangularity_score(apt_polygon) == 0:
+                        best_variants.append(apartment_cells)
+
+            if best_variants:
+                chosen_cells = random.choice(best_variants)
+                best_variants.remove(chosen_cells)
                 for cell in apartment_cells:
-                    cell['assigned'] = False
-                return None
-            return apartment_cells
+                    if cell not in best_variants:
+                        cell['assigned'] = False
+                return chosen_cells
+            else:
+                return apartment_cells
 
     def _update_cell_properties(self, apartment_cells):
         """Updates the properties of cells based on the allocated apartment cells."""

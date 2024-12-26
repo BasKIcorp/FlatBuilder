@@ -500,6 +500,7 @@ class Painter(QGraphicsView):
         print(buildings)
         for section in sections:
             print("Секция: ", section)
+        print(sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table)
         worker = BuildingGenerator(territory)

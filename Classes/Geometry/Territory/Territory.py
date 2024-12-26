@@ -10,7 +10,6 @@ class Territory(GeometricFigure):
                  sections_coords: List[List[List[Tuple[float, float]]]],
                  num_floors: int,
                  apartment_table: list):
-
         # Очистка apartment_table от типов квартир с number = 0
         self.apartment_table = apartment_table
         # Автоматически создаём envelope для территории на основе building_points
@@ -36,9 +35,27 @@ class Territory(GeometricFigure):
         """
         Генерирует планировки для всех зданий на территории.
         """
-        if not self.validate_initial_planning():
-            print(self.messages)
-            return None
+        for i, points in enumerate(self.building_points):
+            # Создаем здание с распределенной таблицей
+            building = Building(points=points,
+                                sections=self.sections_coords[i],
+                                num_floors=self.num_floors,
+                                apartment_table=self.apartment_table[i])
+            self.buildings.append(building)
+        for i, building in enumerate(self.buildings):
+            if not building.validate_initial_planning():
+                self.get_messages()
+                if len(self.messages) == 1 and isinstance(self.messages[0], float):
+                    area_to_reduce = self.messages[0]
+                    self.messages.clear()
+                    self.messages.append(
+                        f"Пожалуйста, уменьшите кол-во квартир или площадь квартир/\n"
+                        f"увеличьте кол-во этажей или площадь здания №{i+1}.\n"
+                        f"Для размещения при заданных параметров не хватает {area_to_reduce} кв.м."
+                    )
+                    print(self.messages[0])
+                return
+        self.buildings.clear()
         for i, points in enumerate(self.building_points):
             # Создаем здание с распределенной таблицей
             building = Building(points=points,
@@ -47,7 +64,6 @@ class Territory(GeometricFigure):
                                 apartment_table=self.apartment_table[i])
             building.generate_floors()
             self.buildings.append(building)
-        self.get_messages()
         if self.messages:
             return
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)
@@ -131,6 +147,8 @@ class Territory(GeometricFigure):
 
     def get_messages(self):
         for building in self.buildings:
+            for message in building.message:
+                self.messages.append(message)
             for floor in building.floors:
                 for section in floor.sections:
                     if section.messages:
@@ -142,45 +160,3 @@ class Territory(GeometricFigure):
                             for message in apartment.messages:
                                 self.messages.append(message)
 
-    def validate_initial_planning(self):
-        """
-        Проверяет, возможно ли планирование по изначальной таблице квартир apartment_table.
-        Если площадь средняя между минимальной и потенциальной площадью меньше 0.7 * allocatable_area,
-        отправляет сообщение с требованием уменьшить количество квартир или площадь.
-        """
-        for i in range(len(self.apartment_table)):
-            # Шаг 1: Расчет минимальной и максимальной потенциальной площади
-            min_potential_area = sum(apt_info['area_range'][0] * apt_info['number']
-                                     for apt_info in self.apartment_table[i].values())
-            max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
-                                     for apt_info in self.apartment_table[i].values())
-            total_building_area = Polygon(self.building_points[i]).area
-            avg_potential_area = (min_potential_area + max_potential_area) / 2
-            if self.num_floors == 1:
-                threshold_area = avg_potential_area
-                print(total_building_area)
-                print(threshold_area)
-                if not threshold_area < total_building_area * 0.6:
-                    min_area_to_reduce = threshold_area - total_building_area * 0.6
-                    self.messages.append(
-                        f"Пожалуйста, уменьшите кол-во квартир или площадь квартир/\n"
-                        f"увеличьте кол-во этажей или площадь здания.\n"
-                        f"Для размещения при заданных параметров не хватает {min_area_to_reduce} кв.м."
-                    )
-                    return False  # Планирование невозможно
-                else:
-                    continue
-            else:
-                allocatable_area = total_building_area * (self.num_floors - 1)  # Площадь для аллокации
-                threshold_area = 0.7 * allocatable_area
-                if not avg_potential_area < threshold_area:
-                    # Шаг 5: Расчет минимальной площади для уменьшения
-                    min_area_to_reduce = avg_potential_area - threshold_area
-                    # Формирование сообщения
-                    self.messages.append(
-                        f"Пожалуйста, уменьшите количество квартир/площадь.\nМинимальная площадь для уменьшения: {min_area_to_reduce:.2f}"
-                    )
-                    return False  # Планирование невозможно
-                else:
-                    continue
-        return True

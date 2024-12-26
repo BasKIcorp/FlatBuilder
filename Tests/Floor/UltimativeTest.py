@@ -3,32 +3,32 @@ from shapely.geometry import Polygon
 
 from Classes.Geometry.Territory.Territory import Territory
 
-# buildings_polygons = [
-#     [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
-# ]
-# sections_polygons = [
-#     [(0, 15), (5, 50), (50, 43), (50, 0)],
-#     [(50, 43), (110, 43), (110, 0), (50, 0)]
-# ]
-# buildings_polygons = [
-#     [(38, 0), (45, 50), (8, 55), (0, 29)]
-# ]
-# sections_polygons = [
-#     [(38, 0), (45, 50), (8, 55), (0, 29)]
-# ]
-# buildings_polygons = [
-#     [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
-# ]
-# sections_polygons = [
-#     [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
-# ]
 buildings_polygons = [
-    [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
 ]
-
 sections_polygons = [[
-    [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+    [(0, 15), (5, 50), (50, 43), (50, 0)],
+    [(50, 43), (110, 43), (110, 0), (50, 0)]
 ]]
+# buildings_polygons = [
+#     [(38, 0), (45, 50), (8, 55), (0, 29)]
+# ]
+# sections_polygons = [
+#     [(38, 0), (45, 50), (8, 55), (0, 29)]
+# ]
+# buildings_polygons = [
+#     [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
+# ]
+# sections_polygons = [
+#     [(0, 0), (25, 0), (50, 35), (70, 35), (70, 45), (0, 45)]
+# ]
+# buildings_polygons = [
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]
+#
+# sections_polygons = [[
+#     [(0, 0), (25, 0), (26, 26), (43, 26), (43, 45), (0, 45)]
+# ]]
 # buildings_polygons = [
 #     [(0, 0), (35, 0), (35, 27), (0, 27)]
 # ]
@@ -37,15 +37,14 @@ sections_polygons = [[
 # ]]
 
 # Параметры
-num_floors = 14
+num_floors = 5
 apartment_table = [{
-    'studio': {'area_range': (25, 35), 'percent': 100, 'number': 24},
+    'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
     '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 36},
     '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
     '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
     '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 24},
 }]
-# Исходные данные полигона территории и зданий
 
 
 # Определяем цвета для каждого типа квартиры

@@ -22,7 +22,7 @@ class Building(GeometricFigure):
         self.num_floors = num_floors  # Количество этажей
         self.sections = sections
         self.apartment_table = self._clean_apartment_table(apartment_table)
-        self.message = None  # Для сообщений об ошибках
+        self.message = []  # Для сообщений об ошибках
 
         # Создаем глубокую копию apartment_table для работы
         self.apartment_table_copy = deepcopy(self.apartment_table)
@@ -41,7 +41,6 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
-        print(f"build {self.apartment_table}")
         if self.num_floors == 1:
             self._generate_single_floor()
             return
@@ -50,6 +49,7 @@ class Building(GeometricFigure):
         floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
         if self.num_floors >= 2:
             self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
+
         # Шаг 2: Создаем уникальные паттерны этажей
         floor_patterns = self.create_unique_floor_pattern(floor_tables)
         # Шаг 3: Генерируем этажи
@@ -63,7 +63,6 @@ class Building(GeometricFigure):
                       apartment_table=self.apartment_table,
                       building_polygon=self.polygon,
                       single_floor=True)
-        print(floor.sections_list)
         floor.generate_floor_planning()
         self.floors.append(floor)
 
@@ -102,7 +101,7 @@ class Building(GeometricFigure):
 
         # Создаём "пустой" паттерн с number=0
         empty_pattern = {}
-        for apt_type, apt_info in base_pattern.items():
+        for apt_type, apt_info in self.apartment_table.items():
             new_info = dict(apt_info)
             new_info["number"] = 0
             empty_pattern[apt_type] = new_info
@@ -190,16 +189,15 @@ class Building(GeometricFigure):
             total_number = apt_info['number']
             min_area, max_area = apt_info['area_range']
             mean_area = (min_area + max_area) / 2
-
-            base_number = total_number // (self.num_floors - 1)
+            if self.num_floors >= 2:
+                base_number = total_number // (self.num_floors - 1)
+            else:
+                base_number = total_number // self.num_floors
             remaining_number = total_number
 
             for floor_index in range(1, self.num_floors):
                 floor_tables[floor_index][apt_type]['number'] += base_number
                 remaining_number -= base_number
-            if self.num_floors == 2:
-                floor_tables[0][apt_type]['number'] += remaining_number
-                remaining_number = 0
 
             self.apartment_table_copy[apt_type]['number'] = remaining_number  # Обновляем только копию
 
@@ -312,5 +310,38 @@ class Building(GeometricFigure):
 
         return new_floor
 
-
+    def validate_initial_planning(self):
+        """
+        Проверяет, возможно ли планирование по изначальной таблице квартир apartment_table.
+        Если площадь средняя между минимальной и потенциальной площадью меньше 0.7 * allocatable_area,
+        отправляет сообщение с требованием уменьшить количество квартир или площадь.
+        """
+        # Шаг 1: Расчет минимальной и максимальной потенциальной площади
+        min_potential_area = sum(apt_info['area_range'][0] * apt_info['number']
+                                 for apt_info in self.apartment_table.values())
+        max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
+                                 for apt_info in self.apartment_table.values())
+        avg_potential_area = (min_potential_area + max_potential_area) / 2
+        if self.num_floors == 1:
+            threshold_area = avg_potential_area
+            if not threshold_area < self.polygon.area * 0.65:
+                min_area_to_reduce = threshold_area - self.polygon.area * 0.65
+                self.message.append(min_area_to_reduce)
+                return False  # Планирование невозможно
+        else:
+            tables_for_floor = self._initialize_empty_floor_tables()
+            tables_for_floor = self.primary_processing(tables_for_floor)  # Работаем с копией таблицы
+            self.secondary_processing(floor_tables=tables_for_floor)  # Работаем с floor_tables
+            min_potential_area = sum(apt_info['area_range'][0] * apt_info['number']
+                                     for apt_info in tables_for_floor[1].values())
+            max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
+                                     for apt_info in tables_for_floor[1].values())
+            avg_potential_area = (min_potential_area + max_potential_area) / 2
+            if not avg_potential_area < self.polygon.area * 0.65:
+                # Шаг 5: Расчет минимальной площади для уменьшения
+                min_area_to_reduce = avg_potential_area - self.polygon.area * 0.65
+                # Формирование сообщения
+                self.message.append(min_area_to_reduce)
+                return False  # Планирование невозможно
+        return True
 
