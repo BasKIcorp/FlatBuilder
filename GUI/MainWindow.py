@@ -160,6 +160,14 @@ class MainWindow(QMainWindow):
 
         self.right_layout.addLayout(floor_layout)
 
+        self.auto_check = QCheckBox(text="Автокоррекция количества квартир")
+        self.auto_check.setFont(font)
+        self.auto_check.setFixedHeight(40)
+        self.auto_check.setFixedWidth(400)
+        self.auto_check.setStyleSheet("QCheckBox { border: none; }")
+
+        self.right_layout.addWidget(self.auto_check)
+
         button_font = QFont()
         button_font.setPointSize(10)
         button_font.setBold(False)
@@ -551,7 +559,8 @@ class MainWindow(QMainWindow):
                     self.generate_button.setDisabled(True)
                     self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")
-                    self.graphics_view.fillApartments(apartment_tables, int(self.floor_edit.text()))
+                    self.graphics_view.fillApartments(apartment_tables, int(self.floor_edit.text()),
+                                                      self.auto_check.isChecked())
 
     def save_as_pdf(self):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf);;All Files (*)")
@@ -604,17 +613,10 @@ class MainWindow(QMainWindow):
                     y_start += box_size + spacing
 
                 scene_rect = self.graphics_view.scene.itemsBoundingRect()
-                # page_width = printer.pageRect(QPrinter.DevicePixel).width()
-                # print(page_width)
-                scene_width = self.graphics_view.width() # Убедимся, что ширина сцены корректно преобразована
-                # print(scene_width)
-                #
-                # # Рассчитываем смещение для центрирования
-                # x_offset = (page_width - scene_width) / 2
                 x_offset = 2500
                 self.graphics_view.show_floor(i, False)
                 painter.save()
-                painter.translate(x_offset, 2 * margin)  # Применяем центрирование по X и отступ по Y
+                painter.translate(x_offset, 2 * margin)
                 self.graphics_view.scene.render(painter, QRectF(0, 0, size, size), scene_rect)
                 painter.restore()
 
