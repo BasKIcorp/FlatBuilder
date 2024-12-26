@@ -670,6 +670,8 @@ class MainWindow(QMainWindow):
         self.combo.setVisible(False)
         self.output_table.setVisible(False)
         self.output_label.setVisible(False)
+        self.graphics_view.room_legend_widget.setVisible(False)
+        self.graphics_view.apt_legend_widget.setVisible(False)
         self.done = False
 
     def show_rectangle_dialog(self, mode):
