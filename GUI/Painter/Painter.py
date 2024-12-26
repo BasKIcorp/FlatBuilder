@@ -496,7 +496,8 @@ class Painter(QGraphicsView):
                     section = [section]
                     sections.append(section)
         if not self.cuts:
-            sections = buildings
+            for building in buildings:
+                sections.append([building])
         self.sections = sections
         print(buildings)
         for section in sections:
