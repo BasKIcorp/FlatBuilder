@@ -16,7 +16,8 @@ class Building(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  sections: List[List[Tuple[float, float]]],
                  num_floors: int,
-                 apartment_table: Dict):
+                 apartment_table: Dict,
+                 to_adjust=False):
         super().__init__(points)
         self.floors = []  # Список этажей в здании
         self.num_floors = num_floors  # Количество этажей
@@ -26,6 +27,8 @@ class Building(GeometricFigure):
 
         # Создаем глубокую копию apartment_table для работы
         self.apartment_table_copy = deepcopy(self.apartment_table)
+        self.to_adjust = to_adjust
+        self.adjusted_table = {}
 
     def _clean_apartment_table(self, apartment_table: Dict) -> Dict:
         """
@@ -41,20 +44,42 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
-        if self.num_floors == 1:
-            self._generate_single_floor()
-            return
-        # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
-        floor_tables = self._initialize_empty_floor_tables()
-        floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
-        if self.num_floors >= 2:
-            self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
+        if not self.to_adjust:
+            if self.num_floors == 1:
+                self._generate_single_floor()
+                return
+            # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
+            floor_tables = self._initialize_empty_floor_tables()
+            floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
+            if self.num_floors >= 2:
+                self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
 
-        # Шаг 2: Создаем уникальные паттерны этажей
-        floor_patterns = self.create_unique_floor_pattern(floor_tables)
-        # Шаг 3: Генерируем этажи
-        self._generate_upper_floors(floor_patterns)
-        self._generate_first_floor(floor_patterns[0])  # Используем первый кортеж
+            # Шаг 2: Создаем уникальные паттерны этажей
+            floor_patterns = self.create_unique_floor_pattern(floor_tables)
+            # Шаг 3: Генерируем этажи
+            self._generate_upper_floors(floor_patterns)
+            self._generate_first_floor()  # Используем первый кортеж
+        else:
+            table_to_adjust = self._initialize_floor_table_with_adjust()
+            adjusted_table = self.adjusting(table_to_adjust)
+            if not adjusted_table:
+                self.message.append('К сожалению, не удалось подправить значения\n'
+                                    'Пожалуйста, увеличьте количество этажей/площадь здания')
+            floor = Floor(points=self.points,
+                          sections_list=self.sections,
+                          apartment_table=adjusted_table,
+                          building_polygon=self.polygon,
+                          single_floor=True)
+            floor.generate_floor_planning()
+            if self.num_floors > 1:
+                for _ in range(self.num_floors - 1):
+                    self.floors.append(floor)
+                self._generate_first_floor()
+            else:
+                self.floors.append(floor)
+            self.adjusted_table = self.generate_adjusted_table(adjusted_table)
+
+
 
     def _generate_single_floor(self):
         """Генерация единственного этажа."""
@@ -91,13 +116,12 @@ class Building(GeometricFigure):
             # Обновляем previous_floor
             previous_floor = floor
 
-    def _generate_first_floor(self, first_pattern: Tuple[Dict, int]):
+    def _generate_first_floor(self):
         """
         Генерация первого этажа на основе первого паттерна,
         но при этом обнуляем число квартир (number=0),
         чтобы этаж был полностью пустым.
         """
-        base_pattern, _ = first_pattern  # первый словарь и количество повторений
 
         # Создаём "пустой" паттерн с number=0
         empty_pattern = {}
@@ -322,8 +346,8 @@ class Building(GeometricFigure):
         avg_potential_area = (min_potential_area + max_potential_area) / 2
         if self.num_floors == 1:
             threshold_area = avg_potential_area
-            if not threshold_area < self.polygon.area * 0.65:
-                min_area_to_reduce = threshold_area - self.polygon.area * 0.65
+            if not threshold_area < self.polygon.area * 0.5:
+                min_area_to_reduce = threshold_area - self.polygon.area * 0.5
                 self.message.append(min_area_to_reduce)
                 return False  # Планирование невозможно
         else:
@@ -335,11 +359,55 @@ class Building(GeometricFigure):
             max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
                                      for apt_info in tables_for_floor[1].values())
             avg_potential_area = (min_potential_area + max_potential_area) / 2
-            if not avg_potential_area < self.polygon.area * 0.65:
+            if not avg_potential_area < self.polygon.area * 0.5:
                 # Шаг 5: Расчет минимальной площади для уменьшения
-                min_area_to_reduce = avg_potential_area - self.polygon.area * 0.65
+                min_area_to_reduce = avg_potential_area - self.polygon.area * 0.5
                 # Формирование сообщения
                 self.message.append(min_area_to_reduce)
                 return False  # Планирование невозможно
         return True
 
+    def _initialize_floor_table_with_adjust(self):
+        """
+        Создает список floor_tables с нулевыми значениями количества квартир для каждого этажа.
+
+        Returns:
+            list: Список словарей для каждого этажа, аналогичный self.apartment_table.
+        """
+
+        clean_table = self._clean_apartment_table(self.apartment_table_copy)
+        table_with_adjust = clean_table.copy()
+        if self.num_floors == 1:
+            return table_with_adjust
+        else:
+            for apt_type in table_with_adjust.keys():
+                table_with_adjust[apt_type]['number'] = table_with_adjust[apt_type]['number'] // (self.num_floors - 1)
+            return table_with_adjust
+
+    def adjusting(self, table):
+        """
+        Проверяет, возможно ли планирование по изначальной таблице квартир apartment_table.
+        Если площадь средняя между минимальной и потенциальной площадью меньше 0.7 * allocatable_area,
+        отправляет сообщение с требованием уменьшить количество квартир или площадь.
+        """
+        # Шаг 1: Расчет минимальной и максимальной потенциальной площади
+        min_potential_area = sum(apt_info['area_range'][0] * apt_info['number']
+                                 for apt_info in table.values())
+        max_potential_area = sum(apt_info['area_range'][1] * apt_info['number']
+                                 for apt_info in table.values())
+        avg_potential_area = (min_potential_area + max_potential_area) / 2
+        threshold_area = avg_potential_area
+        while threshold_area > self.polygon.area * 0.5:
+            for apt_type in table.keys():
+                if table[apt_type]['number'] > 1:
+                    table[apt_type]['number'] -= 1
+                    threshold_area -= (table[apt_type]['area_range'][0] + table[apt_type]['area_range'][1]) / 2
+            if all(table[apt_type]['number'] == 1 for apt_type in table):
+                return None
+            print(threshold_area)
+        return table
+
+    def generate_adjusted_table(self, table):
+        for apt_type in table.keys():
+            table[apt_type]['number'] *= (self.num_floors - 1)
+        return table

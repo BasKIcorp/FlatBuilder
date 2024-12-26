@@ -3,13 +3,15 @@ from shapely.geometry import Polygon
 
 from Classes.Geometry.Territory.Territory import Territory
 
-buildings_polygons = [
-    [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
-]
-sections_polygons = [[
-    [(0, 15), (5, 50), (50, 43), (50, 0)],
-    [(50, 43), (110, 43), (110, 0), (50, 0)]
-]]
+buildings_polygons = [[(-10, -10), (46, -18), (48, 26), (-21, 30)]]
+sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
+# buildings_polygons = [
+#     [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+# ]
+# sections_polygons = [[
+#     [(0, 15), (5, 50), (50, 43), (50, 0)],
+#     [(50, 43), (110, 43), (110, 0), (50, 0)]
+# ]]
 # buildings_polygons = [
 #     [(38, 0), (45, 50), (8, 55), (0, 29)]
 # ]
@@ -37,7 +39,7 @@ sections_polygons = [[
 # ]]
 
 # Параметры
-num_floors = 7
+num_floors = 5
 apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
     '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 22},
@@ -63,7 +65,7 @@ room_colors = {
     'bedroom': 'gray',
 }
 # Создание объекта территории
-territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table)
+territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table, True)
 territory.generate_building_plannings()
 #
 # def plot_section(ax, section, title):

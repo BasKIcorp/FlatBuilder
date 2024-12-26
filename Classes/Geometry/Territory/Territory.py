@@ -9,7 +9,8 @@ class Territory(GeometricFigure):
                  building_points: List[List[Tuple[float, float]]],
                  sections_coords: List[List[List[Tuple[float, float]]]],
                  num_floors: int,
-                 apartment_table: list):
+                 apartment_table: list,
+                 to_adjust = True):
         # Очистка apartment_table от типов квартир с number = 0
         self.apartment_table = apartment_table
         # Автоматически создаём envelope для территории на основе building_points
@@ -30,40 +31,47 @@ class Territory(GeometricFigure):
         self.sections_coords = sections_coords if sections_coords is not None else building_points
         self.total_error = []
         self.output_tables = None
+        self.to_adjust = to_adjust
+        self.adjusted_tables = []
 
     def generate_building_plannings(self):
         """
         Генерирует планировки для всех зданий на территории.
         """
-        for i, points in enumerate(self.building_points):
-            # Создаем здание с распределенной таблицей
-            building = Building(points=points,
-                                sections=self.sections_coords[i],
-                                num_floors=self.num_floors,
-                                apartment_table=self.apartment_table[i])
-            self.buildings.append(building)
-        for i, building in enumerate(self.buildings):
-            if not building.validate_initial_planning():
-                self.get_messages()
-                if len(self.messages) == 1 and isinstance(self.messages[0], float):
-                    area_to_reduce = self.messages[0]
-                    self.messages.clear()
-                    self.messages.append(
-                        f"Пожалуйста, уменьшите кол-во квартир или площадь квартир/\n"
-                        f"увеличьте кол-во этажей или площадь здания №{i+1}.\n"
-                        f"Для размещения при заданных параметров не хватает {area_to_reduce} кв.м."
-                    )
-                    print(self.messages[0])
-                return
+        if not self.to_adjust:
+            for i, points in enumerate(self.building_points):
+                # Создаем здание с распределенной таблицей
+                building = Building(points=points,
+                                    sections=self.sections_coords[i],
+                                    num_floors=self.num_floors,
+                                    apartment_table=self.apartment_table[i])
+                self.buildings.append(building)
+            for i, building in enumerate(self.buildings):
+                if not building.validate_initial_planning():
+                    self.get_messages()
+                    if len(self.messages) == 1 and isinstance(self.messages[0], float):
+                        area_to_reduce = self.messages[0]
+                        self.messages.clear()
+                        self.messages.append(
+                            f"Пожалуйста, уменьшите кол-во квартир или площадь квартир/\n"
+                            f"увеличьте кол-во этажей или площадь здания №{i+1}.\n"
+                            f"Для размещения при заданных параметров не хватает {area_to_reduce} кв.м."
+                        )
+                        print(self.messages[0])
+                    return
         self.buildings.clear()
         for i, points in enumerate(self.building_points):
             # Создаем здание с распределенной таблицей
             building = Building(points=points,
                                 sections=self.sections_coords[i],
                                 num_floors=self.num_floors,
-                                apartment_table=self.apartment_table[i])
+                                apartment_table=self.apartment_table[i],
+                                to_adjust=self.to_adjust)
             building.generate_floors()
             self.buildings.append(building)
+            self.adjusted_tables.append(building.adjusted_table)
+            print(self.adjusted_tables)
+
         if self.messages:
             return
         self.total_error = self.calculate_territory_error(self.buildings, self.apartment_table)

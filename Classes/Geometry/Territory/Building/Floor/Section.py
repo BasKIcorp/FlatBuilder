@@ -33,6 +33,8 @@ class Section(GeometricFigure):
         self.otladka = []
         self.simple_plan = False
         self.temporary_cells = []
+        print(self.apartment_table)
+        print(self.polygon.area)
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -396,9 +398,12 @@ class Section(GeometricFigure):
         elif len([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']]) > 0:
             cells_to_choose = []
             for apart in apartments:
-                cells_to_choose.append([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']
+                cells_to_choose.extend([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']
                                         and not cell['polygon'].intersects(apart.polygon)])
-            queue = [random.choice(cells_to_choose)]
+            if cells_to_choose:
+                queue = [random.choice(cells_to_choose)]
+            else:
+                queue = [random.choice([cell for cell in self.cells if cell['on_perimeter'] and not cell['assigned']])]
             while queue and len(apartment_cells) < apt_cell_count:
                 current_cell = queue.pop(0)
                 if current_cell['assigned']:
