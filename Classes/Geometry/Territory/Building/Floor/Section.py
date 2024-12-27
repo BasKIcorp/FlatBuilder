@@ -34,7 +34,6 @@ class Section(GeometricFigure):
         self.simple_plan = False
         self.temporary_cells = []
         print(self.apartment_table)
-        print(self.polygon.area)
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -43,6 +42,7 @@ class Section(GeometricFigure):
         best_plan = None
         best_score = float('inf')  # The lower, the better
         start_time = time.time()
+        skip_number_validation = False
         if not self.apartment_table:
             return
         # Create the cell grid once
@@ -59,7 +59,9 @@ class Section(GeometricFigure):
                     apt._process_cells()
                     apt.generate_apartment_planning()
                 break
-            if not best_plan and iteration == 13:
+            if not best_plan and iteration == 12:
+                skip_number_validation = True
+            if not best_plan and iteration == 16:
                 self.simple_plan = True
             # Reset the cell assignments between iterations
             self.cells = None
@@ -72,14 +74,12 @@ class Section(GeometricFigure):
 
             # **Validation**: Validate apartments for free sides
             if not apartments:
-                print('not apt')
                 for apart in apartments:
                     apart._reset_cell_assignments()
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
 
-            if not self._validate_apartment_number(apartments) and not self.simple_plan:
-                print('not num')
+            if not self._validate_apartment_number(apartments) and not skip_number_validation:
                 # Если неверное кол-во, откатываемся
                 for apt in apartments:
                     apt._reset_cell_assignments()

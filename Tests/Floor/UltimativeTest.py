@@ -6,12 +6,18 @@ from Classes.Geometry.Territory.Territory import Territory
 # buildings_polygons = [[(-10, -10), (46, -18), (48, 26), (-21, 30)]]
 # sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
 buildings_polygons = [
-    [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+    [(0, 0), (58, 0), (58, 44), (0, 44)]
 ]
 sections_polygons = [[
-    [(0, 15), (5, 50), (50, 43), (50, 0)],
-    [(50, 43), (110, 43), (110, 0), (50, 0)]
+    [(0, 0), (58, 0), (58, 44), (0, 44)]
 ]]
+# buildings_polygons = [
+#     [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+# ]
+# sections_polygons = [[
+#     [(0, 15), (5, 50), (50, 43), (50, 0)],
+#     [(50, 43), (110, 43), (110, 0), (50, 0)]
+# ]]
 
 # buildings_polygons = [
 #     [(38, 0), (45, 50), (8, 55), (0, 29)]
@@ -42,11 +48,11 @@ sections_polygons = [[
 # Параметры
 num_floors = 5
 apartment_table = [{
-    'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
-    '1 room': {'area_range': (40, 55), 'percent': 20, 'number': 22},
-    '2 room': {'area_range': (58, 75), 'percent': 20, 'number': 24},
-    '3 room': {'area_range': (78, 98), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (100, 135), 'percent': 20, 'number': 14},
+    'studio': {'area_range': (25, 35), 'percent': 20, 'number': 20},
+    '1 room': {'area_range': (40, 55), 'percent': 20, 'number': 16},
+    '2 room': {'area_range': (58, 75), 'percent': 20, 'number': 12},
+    '3 room': {'area_range': (78, 98), 'percent': 20, 'number': 15},
+    '4 room': {'area_range': (100, 135), 'percent': 20, 'number': 20},
 }]
 
 
@@ -66,7 +72,7 @@ room_colors = {
     'bedroom': 'gray',
 }
 # Создание объекта территории
-territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table, True)
+territory = Territory(buildings_polygons, sections_polygons, num_floors, apartment_table, to_adjust=True)
 territory.generate_building_plannings()
 #
 # def plot_section(ax, section, title):

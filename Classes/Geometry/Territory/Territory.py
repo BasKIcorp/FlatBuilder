@@ -10,7 +10,7 @@ class Territory(GeometricFigure):
                  sections_coords: List[List[List[Tuple[float, float]]]],
                  num_floors: int,
                  apartment_table: list,
-                 to_adjust = True):
+                 to_adjust = False):
         # Очистка apartment_table от типов квартир с number = 0
         self.apartment_table = apartment_table
         # Автоматически создаём envelope для территории на основе building_points

@@ -44,13 +44,16 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
+        print(self.apartment_table)
         if not self.to_adjust:
             if self.num_floors == 1:
                 self._generate_single_floor()
                 return
+            print('here')
             # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
             floor_tables = self._initialize_empty_floor_tables()
             floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
+            print(floor_tables)
             if self.num_floors >= 2:
                 self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
 
@@ -61,7 +64,6 @@ class Building(GeometricFigure):
             self._generate_first_floor()  # Используем первый кортеж
         else:
             table_to_adjust = self._initialize_floor_table_with_adjust()
-            print(table_to_adjust)
             adjusted_table = self.adjusting(table_to_adjust)
             if not adjusted_table:
                 self.message.append('Невозможно расположить как минимум по 1 квартире существующих типов\n'
@@ -215,8 +217,6 @@ class Building(GeometricFigure):
             min_area, max_area = apt_info['area_range']
             if self.num_floors >= 2:
                 base_number = total_number // (self.num_floors - 1)
-            else:
-                base_number = total_number // self.num_floors
             remaining_number = total_number
 
             for floor_index in range(1, self.num_floors):
@@ -378,7 +378,6 @@ class Building(GeometricFigure):
         """
 
         clean_table = self._clean_apartment_table(self.apartment_table_copy)
-        print(f"cl{clean_table}")
         table_with_adjust = clean_table.copy()
         if self.num_floors == 1:
             return table_with_adjust
@@ -391,7 +390,6 @@ class Building(GeometricFigure):
                 else:
                     table_with_adjust[apt_type]['number'] = table_with_adjust[apt_type]['number'] // (
                                 self.num_floors - 1) + 1
-            print(table_with_adjust)
             return table_with_adjust
 
     def adjusting(self, table):
@@ -408,13 +406,10 @@ class Building(GeometricFigure):
         avg_potential_area = (min_potential_area + max_potential_area) / 2
         threshold_area = avg_potential_area
         if threshold_area < self.polygon.area * 0.5:
-            print('here')
             while threshold_area < self.polygon.area * 0.5:
-                print('in while')
                 for apt_type in table.keys():
                     table[apt_type]['number'] += 1
                     threshold_area += (table[apt_type]['area_range'][0] + table[apt_type]['area_range'][1]) / 2
-                    print(table)
                     if threshold_area > self.polygon.area * 0.5:
                         table[apt_type]['number'] -= 1
                         return table
