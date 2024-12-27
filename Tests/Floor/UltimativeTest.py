@@ -5,19 +5,19 @@ from Classes.Geometry.Territory.Territory import Territory
 
 # buildings_polygons = [[(-10, -10), (46, -18), (48, 26), (-21, 30)]]
 # sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
-buildings_polygons = [
-    [(0, 0), (58, 0), (58, 44), (0, 44)]
-]
-sections_polygons = [[
-    [(0, 0), (58, 0), (58, 44), (0, 44)]
-]]
 # buildings_polygons = [
-#     [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+#     [(0, 0), (58, 0), (58, 44), (0, 44)]
 # ]
 # sections_polygons = [[
-#     [(0, 15), (5, 50), (50, 43), (50, 0)],
-#     [(50, 43), (110, 43), (110, 0), (50, 0)]
+#     [(0, 0), (58, 0), (58, 44), (0, 44)]
 # ]]
+buildings_polygons = [
+    [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+]
+sections_polygons = [[
+    [(0, 15), (5, 50), (50, 43), (50, 0)],
+    [(50, 43), (110, 43), (110, 0), (50, 0)]
+]]
 
 # buildings_polygons = [
 #     [(38, 0), (45, 50), (8, 55), (0, 29)]
@@ -146,9 +146,6 @@ def plot_floor(ax, floor, title):
                 color='black', fontsize=8, ha='center', va='center', weight='bold'
             )
             apartment_number += 1  # Увеличиваем номер квартиры
-            for cell in section.otladka:
-                ix, iy = cell['polygon'].exterior.xy
-                ax.fill(ix, iy, color='black', alpha=0.7)
 
         # Добавляем контур секции
         cx, cy = section.polygon.exterior.xy

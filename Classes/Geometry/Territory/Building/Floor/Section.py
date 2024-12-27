@@ -110,9 +110,23 @@ class Section(GeometricFigure):
             apt._process_cells()
             apt.generate_apartment_planning()
 
+        for apt in self.apartments:
+            cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
+                                                           preserve_topology=True).intersection(
+                self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+            apt.points = list(cutted_polygon.exterior.coords)
+            apt.polygon = Polygon(apt.points)
+            for room in apt.rooms:
+                cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
+                                                               preserve_topology=True).intersection(
+                    apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                if isinstance(cutted_polygon, Polygon):
+                    room.points = list(cutted_polygon.exterior.coords)
+                    room.polygon = Polygon(room.points)
+            apt._generate_windows()
+
         total_time = time.time() - start_time
         print(f"Section planning completed in {total_time:.2f} seconds.")
-
         return self.apartments
 
     def _rectangularity_score(self, poly):

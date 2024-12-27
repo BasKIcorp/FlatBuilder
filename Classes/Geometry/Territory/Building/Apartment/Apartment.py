@@ -115,10 +115,10 @@ class Apartment(GeometricFigure):
 
         self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
         if self.rooms:
-            self._generate_windows()
             return
         if not self.rooms:
             self.messages.append('Не нашел планировку на уровне квартир')
+
 
     def _generate_windows(self):
         """Генерирует окна для комнат на внешних сторонах здания."""
