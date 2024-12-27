@@ -1,10 +1,7 @@
-from collections import defaultdict
-
-from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor, QFont
+from PyQt5.QtGui import QPolygonF, QBrush, QColor, QTransform, QPen, QPainter, QCursor
 from PyQt5.QtWidgets import QGraphicsView, QGraphicsPolygonItem, QGraphicsEllipseItem, QGraphicsLineItem, \
-    QGraphicsTextItem, QGraphicsRectItem, QWidget, QHBoxLayout, QLabel, QFrame, QGraphicsItem, QVBoxLayout, QSpacerItem, \
-    QSizePolicy
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF, QLine, QRectF
+    QWidget, QHBoxLayout, QLabel
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QPoint, QLineF
 import math
 from threading import Thread
 
@@ -33,25 +30,6 @@ room_colors = {
     'living room': '#FFCC99',
     'bedroom': '#CC99FF',
 }
-
-
-def qpolygonf_to_shapely(qpolygonf):
-    points = [(point.x(), point.y()) for point in qpolygonf]
-    return Polygon(points)
-
-
-def shapely_to_qpolygonf(shapely_polygon):
-    return QPolygonF([QPointF(x, y) for x, y in shapely_polygon.exterior.coords])
-
-
-def clip_polygon(smaller_qpolygonf, larger_polygon):
-    smaller_polygon = qpolygonf_to_shapely(smaller_qpolygonf)
-
-    clipped_polygon = smaller_polygon.intersection(larger_polygon)
-
-    if clipped_polygon.is_empty:
-        return None
-    return shapely_to_qpolygonf(clipped_polygon)
 
 
 def calculate_polygon_area(polygon):
@@ -505,7 +483,7 @@ class Painter(QGraphicsView):
         print(buildings)
         for section in sections:
             print("Секция: ", section)
-        print(sections)
+        # print(sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table,
                               to_adjust=adjust_apts)
@@ -534,6 +512,9 @@ class Painter(QGraphicsView):
         self.apartmentsGenerated.emit()
 
     def show_floor(self, floor_num, show_rooms):
+        for item in self.window_items:
+            self.scene.removeItem(item)
+        self.window_items.clear()
         if self.apt_areas:
             for area in self.apt_areas:
                 self.scene.removeItem(area)
@@ -556,13 +537,12 @@ class Painter(QGraphicsView):
             building = self.floors[i]
             floor = building[floor_num]
             for section in floor.sections:
-                print(section.polygon.exterior)
+                print(section.polygon)
                 for apt in section.apartments:
                     poly = apt.polygon
                     x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
-                    polygon = clip_polygon(polygon, section.polygon)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
@@ -571,10 +551,6 @@ class Painter(QGraphicsView):
 
                     self.floor_figures.append(filled_shape)
                     self.scene.addItem(filled_shape)
-
-                    for item in self.window_items:
-                        self.scene.removeItem(item)
-                    self.window_items.clear()
                     for window in apt.windows:
                         window_linestring = window.line
                         x1, y1 = window_linestring.coords[0]
@@ -589,7 +565,6 @@ class Painter(QGraphicsView):
                         x, y = room.polygon.exterior.xy
                         poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                         polygon = QPolygonF(poly_points)
-                        polygon = clip_polygon(polygon, section.polygon)
                         area = calculate_polygon_area(polygon)
                         filled_shape = QGraphicsPolygonItem(polygon)
                         filled_shape.setToolTip(f"Площадь: {area}м^2")

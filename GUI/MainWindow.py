@@ -651,7 +651,6 @@ class MainWindow(QMainWindow):
             self.error_text.setText("")
             self.graphics_view.show_floor(previous_floor, self.checkbox.isChecked())
 
-
     def clear_painter(self):
         self.graphics_view.scene.clear()
         self.graphics_view.reset()
@@ -674,6 +673,21 @@ class MainWindow(QMainWindow):
         self.output_label.setVisible(False)
         self.graphics_view.room_legend_widget.setVisible(False)
         self.graphics_view.apt_legend_widget.setVisible(False)
+        self.output_table.setVisible(False)
+        self.previous_index = 0
+        self.building_combo.setCurrentIndex(0)
+        for i in range(1, self.building_combo.count()):
+            self.building_combo.removeItem(i)
+        area_from = ["25", "40", "58", "78", "100"]
+        area_to = ["35", "55", "75", "98", "135"]
+        number = ["0", "0", "0", "0", "0"]
+        percent = ["0", "0", "0", "0", "0"]
+
+        for row in range(5):
+            self.area_from[row].setText(area_from[row])
+            self.area_to[row].setText(area_to[row])
+            self.percent[row].setText(percent[row])
+            self.number[row].setText(number[row])
         self.done = False
 
     def show_rectangle_dialog(self, mode):
