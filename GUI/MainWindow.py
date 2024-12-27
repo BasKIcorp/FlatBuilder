@@ -85,10 +85,10 @@ class MainWindow(QMainWindow):
 
         self.building_tables = []
 
-        area_from = ["25", "38", "55", "75", "95"]
-        area_to = ["35", "50", "70", "95", "130"]
-        percent = ["20", "20", "20", "20", "20"]
-        number = ["24", "36", "24", "14", "24"]
+        area_from = ["25", "40", "58", "78", "100"]
+        area_to = ["35", "55", "75", "98", "135"]
+        percent = ["0", "0", "0", "0", "0"]
+        number = ["0", "0", "0", "0", "0"]
         for row in range(5):
             area_from_edit = QLineEdit()
             area_from_edit.setValidator(int_validator)
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
             percent_edit.setValidator(int_validator)
             percent_edit.setAlignment(Qt.AlignCenter)
             percent_edit.setFont(font)
-            percent_edit.setText("20")
+            percent_edit.setText(percent[row])
             self.percent.append(percent_edit)
             self.table.setCellWidget(row, 3, percent_edit)
 
@@ -159,6 +159,14 @@ class MainWindow(QMainWindow):
         floor_layout.addWidget(self.checkbox, alignment=Qt.AlignLeft)
 
         self.right_layout.addLayout(floor_layout)
+
+        self.auto_check = QCheckBox(text="Автокоррекция количества квартир")
+        self.auto_check.setFont(font)
+        self.auto_check.setFixedHeight(40)
+        self.auto_check.setFixedWidth(400)
+        self.auto_check.setStyleSheet("QCheckBox { border: none; }")
+
+        self.right_layout.addWidget(self.auto_check)
 
         button_font = QFont()
         button_font.setPointSize(10)
@@ -330,7 +338,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Квартирограф")
 
-        self.setGeometry(0, 0, 1500, 800)
+        self.setGeometry(0, 0, 1500, 900)
         self.combo.move(self.graphics_view.width() // 2 + 50, 0)
 
         self.setFocus()
@@ -398,10 +406,10 @@ class MainWindow(QMainWindow):
                 number = [num.text() for num in self.number]
                 self.building_tables[self.previous_index] = [area_from, area_to, percent, number]
 
-        area_from = ["25", "38", "55", "75", "95"]
-        area_to = ["35", "50", "70", "95", "130"]
-        number = ["24", "36", "24", "14", "24"]
-        percent = ["20"] * 5
+        area_from = ["25", "40", "58", "78", "100"]
+        area_to = ["35", "55", "75", "98", "135"]
+        number = ["0", "0", "0", "0", "0"]
+        percent = ["0", "0", "0", "0", "0"]
 
         new_building = [area_from, area_to, percent, number]
         self.building_tables.append(new_building)
@@ -551,7 +559,8 @@ class MainWindow(QMainWindow):
                     self.generate_button.setDisabled(True)
                     self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")
-                    self.graphics_view.fillApartments(apartment_tables, int(self.floor_edit.text()))
+                    self.graphics_view.fillApartments(apartment_tables, int(self.floor_edit.text()),
+                                                      self.auto_check.isChecked())
 
     def save_as_pdf(self):
         file_path, _ = QFileDialog.getSaveFileName(self, "Save as PDF", "", "PDF Files (*.pdf);;All Files (*)")
@@ -604,17 +613,10 @@ class MainWindow(QMainWindow):
                     y_start += box_size + spacing
 
                 scene_rect = self.graphics_view.scene.itemsBoundingRect()
-                # page_width = printer.pageRect(QPrinter.DevicePixel).width()
-                # print(page_width)
-                scene_width = self.graphics_view.width() # Убедимся, что ширина сцены корректно преобразована
-                # print(scene_width)
-                #
-                # # Рассчитываем смещение для центрирования
-                # x_offset = (page_width - scene_width) / 2
                 x_offset = 2500
                 self.graphics_view.show_floor(i, False)
                 painter.save()
-                painter.translate(x_offset, 2 * margin)  # Применяем центрирование по X и отступ по Y
+                painter.translate(x_offset, 2 * margin)
                 self.graphics_view.scene.render(painter, QRectF(0, 0, size, size), scene_rect)
                 painter.restore()
 

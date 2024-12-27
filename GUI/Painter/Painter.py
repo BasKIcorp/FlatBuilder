@@ -469,7 +469,7 @@ class Painter(QGraphicsView):
         else:
             pass
 
-    def fillApartments(self, apartment_table, num_floors):
+    def fillApartments(self, apartment_table, num_floors, adjust_apts):
         if self.points:
             self.all_points.append(self.points)
             self.polygons.update({self.polygon: self.points})
@@ -507,7 +507,8 @@ class Painter(QGraphicsView):
             print("Секция: ", section)
         print(sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
-                              num_floors=num_floors, apartment_table=apartment_table)
+                              num_floors=num_floors, apartment_table=apartment_table,
+                              to_adjust=adjust_apts)
         worker = BuildingGenerator(territory)
         worker_thread = Thread(target=worker.run)
         worker.finished.connect(self.onApartmentsGenerated)
@@ -554,7 +555,6 @@ class Painter(QGraphicsView):
         for i in range(len(self.floors)):
             building = self.floors[i]
             floor = building[floor_num]
-            # print(floor.polygon.exterior)
             for section in floor.sections:
                 print(section.polygon.exterior)
                 for apt in section.apartments:
@@ -562,35 +562,15 @@ class Painter(QGraphicsView):
                     x, y = poly.exterior.xy
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                     polygon = QPolygonF(poly_points)
-                    # outer_polygon = list(self.polygons.keys())[i].polygon()
                     polygon = clip_polygon(polygon, section.polygon)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
                     filled_shape.setPen(QPen(Qt.black, 0.3))
                     filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))
-                    #
-                    # shape = qpolygonf_to_shapely(QPolygonF(poly_points))
-                    # centroid = shape.centroid
-                    # centroid_x, centroid_y = centroid.x, centroid.y
-                    # area = shape.area
 
                     self.floor_figures.append(filled_shape)
                     self.scene.addItem(filled_shape)
-                    #
-                    # area_text = QGraphicsTextItem(f"{area:.1f}")
-                    # area_text.setScale(0.05)
-                    # bounding_rect = area_text.boundingRect()
-                    # scaled_width = bounding_rect.width() * area_text.scale()
-                    # scaled_height = bounding_rect.height() * area_text.scale()
-                    #
-                    # centered_x = centroid_x - scaled_width / 2
-                    # centered_y = centroid_y - scaled_height / 2
-                    #
-                    # area_text.setPos(centered_x, centered_y)
-                    # area_text.setZValue(1)
-                    # self.scene.addItem(area_text)
-                    # self.apt_areas.append(area_text)
 
                     for item in self.window_items:
                         self.scene.removeItem(item)
@@ -609,7 +589,6 @@ class Painter(QGraphicsView):
                         x, y = room.polygon.exterior.xy
                         poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
                         polygon = QPolygonF(poly_points)
-                        # outer_polygon = list(self.polygons.keys())[i].polygon()
                         polygon = clip_polygon(polygon, section.polygon)
                         area = calculate_polygon_area(polygon)
                         filled_shape = QGraphicsPolygonItem(polygon)
@@ -618,28 +597,9 @@ class Painter(QGraphicsView):
                         filled_shape.setPen(QPen(Qt.black, 0.05))
                         self.rooms.append(filled_shape)
 
-                        # shape = qpolygonf_to_shapely(QPolygonF(poly_points))
-                        # centroid = shape.centroid
-                        # centroid_x, centroid_y = centroid.x, centroid.y
-                        # area = shape.area
-                        #
-                        # area_text = QGraphicsTextItem(f"{area:.1f}")
-                        # area_text.setScale(0.05)
-                        #
-                        # bounding_rect = area_text.boundingRect()
-                        # scaled_width = bounding_rect.width() * area_text.scale()
-                        # scaled_height = bounding_rect.height() * area_text.scale()
-                        #
-                        # centered_x = centroid_x - scaled_width / 2
-                        # centered_y = centroid_y - scaled_height / 2
-                        #
-                        # area_text.setPos(centered_x, centered_y)
-                        # area_text.setZValue(1)
-                        # self.room_areas.append(area_text)
                         if show_rooms:
                             self.scene.addItem(filled_shape)
                             if self.apt_areas:
                                 for area in self.apt_areas:
                                     self.scene.removeItem(area)
-                            # self.scene.addItem(area_text)
 
