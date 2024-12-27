@@ -34,22 +34,12 @@ class Apartment(GeometricFigure):
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
-        max_iterations = 40
+        max_iterations = 12
         best_plan = None
         best_score = float('inf')
         failure = False
-        least_area = 6
         for i in range(max_iterations):
-            if not best_plan and i % 39 == 0:
-                max_iterations += 40
-            if best_plan and i % 10 == 0:
-                break
-            if i % 10 == 0:
-                least_area -= 1
-            if i == 35:
-                least_area = 1
             rooms = []
-            rooms_no_cuts = []
             room_number = 0
             self.cells = None
             self.check_and_create_cell_grid(cell_size=1, polygon_to_check=Polygon(self.points))
@@ -107,32 +97,19 @@ class Apartment(GeometricFigure):
                             points = list(room_polygon.geoms[0].exterior.coords)
                         else:
                             continue
-
                     # Создаем объект Room с соответствующим типом
-                    cutted_polygon = Polygon(points).simplify(tolerance=0.01,
-                                                              preserve_topology=True).intersection(
-                        self.building_polygon.simplify(tolerance=0.01, preserve_topology=True))
-                    if not isinstance(cutted_polygon, Polygon):
-                        failure = True
-                        break
-                    room = Room(points=list(cutted_polygon.exterior.coords), room_type=room_type)
+                    room = Room(points=points, room_type=room_type)
                     room.cells = room_cells
                     rooms.append(room)
-                    no_cut_room = Room(points=points, room_type=room_type)
-                    no_cut_room.cells = room_cells
-                    rooms_no_cuts.append(no_cut_room)
+                    # rooms = self.post_processing(rooms)
 
 
                 if failure:
                     break
-            for room in rooms:
-                if room.type != 'hall' and room.area < least_area:
-                    failure = True
-                    break
             if failure:
                 continue
             total_error = self._calc_total_error(rooms[:-1])
-            if total_error < best_score and sum(room.area for room in rooms_no_cuts) == self.area:
+            if total_error < best_score and sum(room.area for room in rooms) == self.area:
                 best_score = total_error
                 best_plan = rooms
 
@@ -150,11 +127,15 @@ class Apartment(GeometricFigure):
         for room in self.rooms:
             if room.type not in ['living room', 'bedroom', 'kitchen']:
                 continue  # Только для определенных типов комнат
-
+            cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
+                                                      preserve_topology=True).intersection(
+                self.building_polygon.simplify(tolerance=0.01, preserve_topology=True))
+            if not isinstance(cutted_polygon, Polygon):
+                continue
             # Получаем стороны комнаты
             room_sides = [
-                LineString([room.polygon.exterior.coords[i], room.polygon.exterior.coords[i + 1]])
-                for i in range(len(room.polygon.exterior.coords) - 1)
+                LineString([cutted_polygon.exterior.coords[i], cutted_polygon.exterior.coords[i + 1]])
+                for i in range(len(cutted_polygon.exterior.coords) - 1)
             ]
 
             for room_side in room_sides:
@@ -255,6 +236,8 @@ class Apartment(GeometricFigure):
         # else:
         #     start_cell = random.choice(remaining_cells)
         queue = [start_cell]
+        bool_variants = [True, False]
+        growing_method = random.choice(bool_variants)
         while queue and len(room_cells) < room_cell_count:
             current_cell = queue.pop(0)
             if current_cell['assigned']:
@@ -270,7 +253,8 @@ class Apartment(GeometricFigure):
             # Сортируем соседей по убыванию количества их свободных соседей
             neighbors_sorted = sorted(
                 neighbors,
-                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']])
+                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
+                reverse=growing_method
             )
 
             # Добавляем отсортированных соседей в очередь
