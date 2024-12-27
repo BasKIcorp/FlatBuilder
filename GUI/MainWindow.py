@@ -85,10 +85,10 @@ class MainWindow(QMainWindow):
 
         self.building_tables = []
 
-        area_from = ["25", "38", "55", "75", "95"]
-        area_to = ["35", "50", "70", "95", "130"]
-        percent = ["20", "20", "20", "20", "20"]
-        number = ["24", "36", "24", "14", "24"]
+        area_from = ["25", "40", "58", "78", "100"]
+        area_to = ["35", "55", "75", "98", "135"]
+        percent = ["0", "0", "0", "0", "0"]
+        number = ["0", "0", "0", "0", "0"]
         for row in range(5):
             area_from_edit = QLineEdit()
             area_from_edit.setValidator(int_validator)
@@ -110,7 +110,7 @@ class MainWindow(QMainWindow):
             percent_edit.setValidator(int_validator)
             percent_edit.setAlignment(Qt.AlignCenter)
             percent_edit.setFont(font)
-            percent_edit.setText("20")
+            percent_edit.setText(percent[row])
             self.percent.append(percent_edit)
             self.table.setCellWidget(row, 3, percent_edit)
 
@@ -338,7 +338,7 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Квартирограф")
 
-        self.setGeometry(0, 0, 1500, 800)
+        self.setGeometry(0, 0, 1500, 900)
         self.combo.move(self.graphics_view.width() // 2 + 50, 0)
 
         self.setFocus()
@@ -406,10 +406,10 @@ class MainWindow(QMainWindow):
                 number = [num.text() for num in self.number]
                 self.building_tables[self.previous_index] = [area_from, area_to, percent, number]
 
-        area_from = ["25", "38", "55", "75", "95"]
-        area_to = ["35", "50", "70", "95", "130"]
-        number = ["24", "36", "24", "14", "24"]
-        percent = ["20"] * 5
+        area_from = ["25", "40", "58", "78", "100"]
+        area_to = ["35", "55", "75", "98", "135"]
+        number = ["0", "0", "0", "0", "0"]
+        percent = ["0", "0", "0", "0", "0"]
 
         new_building = [area_from, area_to, percent, number]
         self.building_tables.append(new_building)
