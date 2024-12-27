@@ -1,6 +1,3 @@
-from random import shuffle
-from turtledemo.penrose import start
-
 
 
 from Classes.Geometry.GeometricFigure import GeometricFigure
@@ -37,12 +34,22 @@ class Apartment(GeometricFigure):
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
-        max_iterations = 20
+        max_iterations = 40
         best_plan = None
         best_score = float('inf')
         failure = False
+        least_area = 6
         for i in range(max_iterations):
+            if not best_plan and i % 39 == 0:
+                max_iterations += 40
+            if best_plan and i % 10 == 0:
+                break
+            if i % 10 == 0:
+                least_area -= 1
+            if i == 35:
+                least_area = 1
             rooms = []
+            rooms_no_cuts = []
             room_number = 0
             self.cells = None
             self.check_and_create_cell_grid(cell_size=1, polygon_to_check=Polygon(self.points))
@@ -100,26 +107,34 @@ class Apartment(GeometricFigure):
                             points = list(room_polygon.geoms[0].exterior.coords)
                         else:
                             continue
+
                     # Создаем объект Room с соответствующим типом
-                    room = Room(points=points, room_type=room_type)
+                    cutted_polygon = Polygon(points).simplify(tolerance=0.01,
+                                                              preserve_topology=True).intersection(
+                        self.building_polygon.simplify(tolerance=0.01, preserve_topology=True))
+                    if not isinstance(cutted_polygon, Polygon):
+                        failure = True
+                        break
+                    room = Room(points=list(cutted_polygon.exterior.coords), room_type=room_type)
                     room.cells = room_cells
                     rooms.append(room)
-                    # rooms = self.post_processing(rooms)
+                    no_cut_room = Room(points=points, room_type=room_type)
+                    no_cut_room.cells = room_cells
+                    rooms_no_cuts.append(no_cut_room)
 
 
                 if failure:
                     break
+            for room in rooms:
+                if room.type != 'hall' and room.area < least_area:
+                    failure = True
+                    break
             if failure:
                 continue
             total_error = self._calc_total_error(rooms[:-1])
-            if total_error < best_score:
+            if total_error < best_score and sum(room.area for room in rooms_no_cuts) == self.area:
                 best_score = total_error
                 best_plan = rooms
-
-            if sum(room.area for room in rooms) == self.area:
-                self.rooms = rooms
-                self._generate_windows()
-                return
 
         self.rooms = best_plan if best_plan is not None else []  # Save the best generated plan
         if self.rooms:
@@ -128,56 +143,61 @@ class Apartment(GeometricFigure):
         if not self.rooms:
             self.messages.append('Не нашел планировку на уровне квартир')
 
-
     def _generate_windows(self):
         """Генерирует окна для комнат на внешних сторонах здания."""
-        used_perimeter_sides = set()  # Хранит стороны периметра здания, на которых уже есть окна
+        buffer_tolerance = 0.01  # Буфер для корректировки угловых пересечений
 
         for room in self.rooms:
             if room.type not in ['living room', 'bedroom', 'kitchen']:
                 continue  # Только для определенных типов комнат
-            new_room_polygon = room.polygon.simplify(tolerance=1, preserve_topology=True)
+
+            # Получаем стороны комнаты
             room_sides = [
-                LineString([new_room_polygon.exterior.coords[i],
-                            new_room_polygon.exterior.coords[i + 1]])
-                for i in range(len(new_room_polygon.exterior.coords) - 1)
+                LineString([room.polygon.exterior.coords[i], room.polygon.exterior.coords[i + 1]])
+                for i in range(len(room.polygon.exterior.coords) - 1)
             ]
 
             for room_side in room_sides:
                 # Проверяем пересечение стороны комнаты с периметром здания
-                if room_side.intersects(self.building_polygon.exterior):
-                    # Находим пересекающийся участок
-                    intersection = room_side.intersection(self.building_polygon.exterior)
+                intersection = room_side.intersection(self.building_polygon.exterior)
 
-                    if isinstance(intersection, MultiLineString):
-                        # Объединяем MultiLineString в один LineString
-                        intersection = LineString([coord for line in intersection.geoms for coord in line.coords])
+                # Если пересечение слишком маленькое или точка, применяем буфер
+                if isinstance(intersection, Point) or \
+                        (isinstance(intersection, LineString) and intersection.length < 0.5):
+                    # Буферизация стороны для улучшения пересечения
+                    buffered_room_side = room_side.buffer(buffer_tolerance).intersection(self.building_polygon.exterior)
+                    intersection = buffered_room_side
 
-                    if isinstance(intersection, LineString) and intersection.length > 0:
-                        # Проверяем длину пересечения
-                        if intersection.length < 1.5:
-                            continue
+                # Проверяем пересечение после буфера
+                if isinstance(intersection, MultiLineString):
+                    # Объединяем MultiLineString в один LineString
+                    intersection = LineString([coord for line in intersection.geoms for coord in line.coords])
 
-                        # Находим центр пересечения
-                        midpoint = intersection.interpolate(0.5, normalized=True)
+                if isinstance(intersection, LineString) and intersection.length > 0:
+                    # Проверяем длину пересечения
+                    if intersection.length < 0.5:
+                        continue
 
-                        # Вычисляем две точки на расстоянии 0.75 метра в обе стороны от центра
-                        start_distance = max(0, intersection.project(midpoint) - 0.75)
-                        end_distance = min(intersection.length, intersection.project(midpoint) + 0.75)
+                    # Находим центр пересечения
+                    midpoint = intersection.interpolate(0.5, normalized=True)
 
-                        if end_distance <= start_distance:
-                            continue
+                    # Вычисляем две точки на расстоянии 0.75 метра в обе стороны от центра
+                    start_distance = max(0, intersection.project(midpoint) - 0.5)
+                    end_distance = min(intersection.length, intersection.project(midpoint) + 0.5)
 
-                        # Находим точки начала и конца окна
-                        start_point = intersection.interpolate(start_distance)
-                        end_point = intersection.interpolate(end_distance)
+                    if end_distance <= start_distance:
+                        continue
 
-                        # Создаем LineString длиной 1.5 метра
-                        window_line = LineString([start_point, end_point])
+                    # Находим точки начала и конца окна
+                    start_point = intersection.interpolate(start_distance)
+                    end_point = intersection.interpolate(end_distance)
 
-                        # Добавляем окно в комнату
-                        self.windows.append(Window(window_line))
-                        break  # Переходим к следующей комнате
+                    # Создаем LineString длиной 1.5 метра
+                    window_line = LineString([start_point, end_point])
+
+                    # Добавляем окно в комнату
+                    self.windows.append(Window(window_line))
+                    break  # Переходим к следующей комнате
 
     def _calc_total_error(self, rooms):
         def rectangularity_score(poly):
@@ -250,8 +270,7 @@ class Apartment(GeometricFigure):
             # Сортируем соседей по убыванию количества их свободных соседей
             neighbors_sorted = sorted(
                 neighbors,
-                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']]),
-                reverse=True
+                key=lambda cell: len([n for n in cell['neighbors'] if not n['assigned']])
             )
 
             # Добавляем отсортированных соседей в очередь
@@ -270,11 +289,11 @@ class Apartment(GeometricFigure):
             return min_cells, max_cells
         else:
             if room_type == 'kitchen':
-                min_cells = int(0.7 * (self.polygon.area - allocated_area) / 3)
+                min_cells = int(0.9 * (self.polygon.area - allocated_area) / 3)
                 max_cells = int((self.polygon.area - allocated_area) / 3)
                 return min_cells, max_cells
             elif room_type == 'bathroom':
-                min_cells = int(0.6 * (self.polygon.area - allocated_area) / 2)
+                min_cells = int(0.8 * (self.polygon.area - allocated_area) / 2)
                 max_cells = int((self.polygon.area - allocated_area) / 2)
                 return min_cells, max_cells
 
@@ -289,23 +308,32 @@ class Apartment(GeometricFigure):
                     corner_cells.append(cell_for_new_corner)
 
         if room_type in ['living room', 'bedroom']:
-            return_cells = [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon)
-                            or cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon)]
+            return_cells = []
+            return_cells.extend([cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon.exterior)])
+            return_cells.extend([cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
+
             if return_cells:
                 return random.choice(return_cells)
             elif corner_cells:
                 return random.choice(corner_cells)
 
         elif room_type == 'kitchen':
-            return_cells = [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon.exterior)
-                            or cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon)]
+            return_cells = []
+            return_cells.extend(
+                [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon.exterior)])
+            return_cells.extend(
+                [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
             if return_cells:
                 return random.choice(return_cells)
             elif corner_cells:
                 return random.choice(corner_cells)
 
         elif room_type == 'bathroom':
-            return_cells = [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)]
+            return_cells = []
+            return_cells.extend(
+                [cell for cell in corner_cells if cell['polygon'].overlaps(self.building_polygon.exterior)])
+            return_cells.extend(
+                [cell for cell in corner_cells if cell['polygon'].intersects(self.building_polygon.exterior)])
             if return_cells:
                 return random.choice(return_cells)
             elif corner_cells:
@@ -340,6 +368,8 @@ class Apartment(GeometricFigure):
         shorter, longer = side_lengths[0], side_lengths[2]
         ratio = longer / (shorter + 1e-9)
         return ratio <= max_aspect_ratio, ratio
+
+
     #
     # def post_processing(self, rooms):
     #     def replace_element(lst, old_value, new_value):

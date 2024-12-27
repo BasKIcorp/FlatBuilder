@@ -65,6 +65,7 @@ class Building(GeometricFigure):
             if not adjusted_table:
                 self.message.append('К сожалению, не удалось подправить значения\n'
                                     'Пожалуйста, увеличьте количество этажей/площадь здания')
+                return None
             floor = Floor(points=self.points,
                           sections_list=self.sections,
                           apartment_table=adjusted_table,

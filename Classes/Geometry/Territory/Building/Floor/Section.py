@@ -48,7 +48,7 @@ class Section(GeometricFigure):
         # Create the cell grid once
         for iteration in range(max_iterations):
             print(f"Итерация {iteration}")
-            if best_plan and iteration % 2 == 0:
+            if best_plan and iteration % 4 == 0:
                 self.apartments = best_plan
                 if not self.apartments:
                     print("Не нашел планировку")
@@ -59,7 +59,7 @@ class Section(GeometricFigure):
                     apt._process_cells()
                     apt.generate_apartment_planning()
                 break
-            if not best_plan and iteration == 10:
+            if not best_plan and iteration == 13:
                 self.simple_plan = True
             # Reset the cell assignments between iterations
             self.cells = None
@@ -658,3 +658,4 @@ class Section(GeometricFigure):
                 if cell['polygon'].intersects(expanded_side):
                     cell['assigned'] = True
                     self.temporary_cells.append(cell)
+

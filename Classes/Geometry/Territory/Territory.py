@@ -70,7 +70,6 @@ class Territory(GeometricFigure):
             building.generate_floors()
             self.buildings.append(building)
             self.adjusted_tables.append(building.adjusted_table)
-            print(self.adjusted_tables)
 
         if self.messages:
             return

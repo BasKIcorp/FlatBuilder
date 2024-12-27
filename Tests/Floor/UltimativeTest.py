@@ -3,15 +3,16 @@ from shapely.geometry import Polygon
 
 from Classes.Geometry.Territory.Territory import Territory
 
-buildings_polygons = [[(-10, -10), (46, -18), (48, 26), (-21, 30)]]
-sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
-# buildings_polygons = [
-#     [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
-# ]
-# sections_polygons = [[
-#     [(0, 15), (5, 50), (50, 43), (50, 0)],
-#     [(50, 43), (110, 43), (110, 0), (50, 0)]
-# ]]
+# buildings_polygons = [[(-10, -10), (46, -18), (48, 26), (-21, 30)]]
+# sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
+buildings_polygons = [
+    [(0, 15), (5, 50), (50, 43), (110, 43), (110, 0), (50, 0)]
+]
+sections_polygons = [[
+    [(0, 15), (5, 50), (50, 43), (50, 0)],
+    [(50, 43), (110, 43), (110, 0), (50, 0)]
+]]
+
 # buildings_polygons = [
 #     [(38, 0), (45, 50), (8, 55), (0, 29)]
 # ]
@@ -42,10 +43,10 @@ sections_polygons = [[[(-10, -10), (46, -18), (48, 26), (-21, 30)]]]
 num_floors = 5
 apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 20, 'number': 24},
-    '1 room': {'area_range': (38, 50), 'percent': 20, 'number': 22},
-    '2 room': {'area_range': (55, 70), 'percent': 20, 'number': 24},
-    '3 room': {'area_range': (75, 95), 'percent': 20, 'number': 14},
-    '4 room': {'area_range': (95, 130), 'percent': 20, 'number': 14},
+    '1 room': {'area_range': (40, 55), 'percent': 20, 'number': 22},
+    '2 room': {'area_range': (58, 75), 'percent': 20, 'number': 24},
+    '3 room': {'area_range': (78, 98), 'percent': 20, 'number': 14},
+    '4 room': {'area_range': (100, 135), 'percent': 20, 'number': 14},
 }]
 
 
@@ -128,7 +129,9 @@ def plot_floor(ax, floor, title):
                 rx, ry = room_polygon.exterior.xy
                 ax.fill(rx, ry, color=color, alpha=0.6)  # Заливка комнаты
                 ax.plot(rx, ry, color='black', linewidth=0.5)  # Тонкий контур комнаты
-
+            for window in apartment.windows:
+                wx, wy = window.line.xy
+                ax.plot(wx, wy, color='blue', linewidth=3)
             # Номер квартиры
             apartment_centroid = polygon.centroid
             ax.text(
