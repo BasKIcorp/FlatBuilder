@@ -34,11 +34,22 @@ class Apartment(GeometricFigure):
 
     def generate_apartment_planning(self):
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
-        max_iterations = 12
+        max_iterations = 60
         best_plan = None
         best_score = float('inf')
         failure = False
+        simple_plan = False
+        very_simple_plan = False
+        hall_validation = True
         for i in range(max_iterations):
+            if i % 9 == 0 and best_plan:
+                break
+            if i % 21 == 0 and not best_plan:
+                hall_validation = False
+            if i % 31 == 0 and not best_plan:
+                simple_plan = True
+            if i % 51 == 0 and not best_plan:
+                very_simple_plan = True
             rooms = []
             room_number = 0
             self.cells = None
@@ -49,6 +60,7 @@ class Apartment(GeometricFigure):
             # Распределение комнат, учитывая последнее условие
             for index, (room_type, count) in enumerate(room_table):
                 for _ in range(count):
+                    stop = False
                     if index == len(room_table) - 1 and _ == count - 1:
                         room_cells = [cell for cell in self.cells if not cell['assigned']]
                     else:
@@ -64,8 +76,52 @@ class Apartment(GeometricFigure):
 
                             # Выделяем ячейки для комнаты
                             room_cells = self._allocate_room_cells(remaining_cells, min_cells, max_cells, room_type)
-                    if not self.aspect_ratio_ok(room_cells) and room_type in ['living room', 'bedroom']:
+                    if not min_cells <= len(room_cells) <= max_cells and room_type in ['living room', 'bedroom'] and not very_simple_plan:
+                        continue
+                    if len(room_cells) <= 4 and room_type != 'hall' and not simple_plan:
+                        continue
+                    if not self.aspect_ratio_ok(room_cells) and room_type in ['living room', 'bedroom'] and not very_simple_plan:
                         failure = True
+                        break
+                    if room_type == 'hall' and hall_validation and self.free_sides:
+                        room_polygon = union_all([cell['polygon'] for cell in room_cells])
+                        if isinstance(room_polygon, MultiPolygon):
+                            failure = True
+                            break
+                        if self.free_sides:
+                            intersects = False
+                            for side in self.free_sides:
+                                if room_polygon.intersects(side):
+                                    intersects = True
+                                    break
+                            if not intersects:
+                                failure = True
+                        if failure:
+                            break
+                        points = list(room_polygon.exterior.coords)
+                        room = Room(points=points, room_type=room_type)
+                        room.cells = room_cells
+                        rooms.append(room)
+                        continue
+                    if room_type == 'hall' and not hall_validation and self.free_sides and not very_simple_plan:
+                        room_polygon = union_all([cell['polygon'] for cell in room_cells])
+                        if not isinstance(room_polygon, Polygon):
+                            failure = True
+                            break
+                        points = list(room_polygon.exterior.coords)
+                        room = Room(points=points, room_type=room_type)
+                        room.cells = room_cells
+                        rooms.append(room)
+
+                        for room_changed in rooms:
+                            for side in self.free_sides:
+                                if room_changed.polygon.exterior.intersects(side) and room_changed.type not in ['bedroom','living room']:
+                                    room_changed.type, room.type = 'hall', room_changed.type
+                                    stop = True
+                                    break
+                            if stop:
+                                break
+                    if stop:
                         break
 
                     room_polygon = union_all([cell['polygon'] for cell in room_cells])
@@ -117,7 +173,7 @@ class Apartment(GeometricFigure):
         if self.rooms:
             return
         if not self.rooms:
-            self.messages.append('Не нашел планировку на уровне квартир')
+            self.messages.append('Не нашел планировку на уровне квартир. Пожалуйста, увеличьте площади квартир')
 
 
     def _generate_windows(self):
@@ -140,7 +196,7 @@ class Apartment(GeometricFigure):
 
             for room_side in room_sides:
                 # Проверяем пересечение стороны комнаты с периметром здания
-                intersection = room_side.intersection(self.building_polygon.exterior)
+                intersection = room_side.intersection(self.building_polygon.simplify(tolerance=0.01, preserve_topology=True).exterior)
 
                 # Если пересечение слишком маленькое или точка, применяем буфер
                 if isinstance(intersection, Point) or \
@@ -161,6 +217,7 @@ class Apartment(GeometricFigure):
 
                     # Находим центр пересечения
                     midpoint = intersection.interpolate(0.5, normalized=True)
+
 
                     # Вычисляем две точки на расстоянии 0.75 метра в обе стороны от центра
                     start_distance = max(0, intersection.project(midpoint) - 0.5)
