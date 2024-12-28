@@ -49,10 +49,10 @@ sections_polygons = [[
 num_floors = 5
 apartment_table = [{
     'studio': {'area_range': (25, 35), 'percent': 20, 'number': 20},
-    '1 room': {'area_range': (40, 55), 'percent': 20, 'number': 16},
-    '2 room': {'area_range': (58, 75), 'percent': 20, 'number': 12},
-    '3 room': {'area_range': (78, 98), 'percent': 20, 'number': 15},
-    '4 room': {'area_range': (100, 135), 'percent': 20, 'number': 20},
+    '1 room': {'area_range': (43, 60), 'percent': 20, 'number': 16},
+    '2 room': {'area_range': (65, 82), 'percent': 20, 'number': 12},
+    '3 room': {'area_range': (85, 105), 'percent': 20, 'number': 15},
+    '4 room': {'area_range': (110, 145), 'percent': 20, 'number': 20},
 }]
 
 

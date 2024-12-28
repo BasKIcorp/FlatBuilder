@@ -19,7 +19,8 @@ class Section(GeometricFigure):
     def __init__(self, points: List[Tuple[float, float]],
                  apartment_table: Dict,
                  apartments: List['Apartment'] = None,
-                 building_polygon: Polygon = None):
+                 building_polygon: Polygon = None,
+                 to_adjust: bool = False):
         super().__init__(points)
         self.apartments = apartments if apartments is not None else []  # List of Apartment objects
         self.queue_corners_to_allocate = []
@@ -33,6 +34,7 @@ class Section(GeometricFigure):
         self.otladka = []
         self.simple_plan = False
         self.temporary_cells = []
+        self.to_adjust = to_adjust
         print(self.apartment_table)
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
@@ -43,6 +45,7 @@ class Section(GeometricFigure):
         best_score = float('inf')  # The lower, the better
         start_time = time.time()
         skip_number_validation = False
+        alternative_plan = []
         if not self.apartment_table:
             return
         # Create the cell grid once
@@ -58,8 +61,36 @@ class Section(GeometricFigure):
                     apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
                     apt._process_cells()
                     apt.generate_apartment_planning()
+                for apt in self.apartments:
+                    cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
+                                                                  preserve_topology=True).intersection(
+                        self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                    if isinstance(cutted_polygon, MultiPolygon):
+                        cutted_polygon = max(cutted_polygon.geoms, key=lambda a: a.area)
+                    apt.points = list(cutted_polygon.exterior.coords)
+                    apt.polygon = Polygon(apt.points)
+                    for room in apt.rooms:
+                        cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
+                                                                       preserve_topology=True).intersection(
+                            apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                        if isinstance(cutted_polygon, Polygon):
+                            room.points = list(cutted_polygon.exterior.coords)
+                            room.polygon = Polygon(room.points)
+                    apt._generate_windows()
                 break
             if not best_plan and iteration == 12:
+                if self.to_adjust:
+                    print('this case')
+                    self.apartments = alternative_plan
+                    if not self.apartments:
+                        print("Не нашел планировку")
+                    for apt in self.apartments:
+                        apt.section_polygon = self.polygon
+                        apt.cells = None
+                        apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
+                        apt._process_cells()
+                        apt.generate_apartment_planning()
+                    break
                 skip_number_validation = True
             if not best_plan and iteration == 16:
                 self.simple_plan = True
@@ -78,7 +109,8 @@ class Section(GeometricFigure):
                     apart._reset_cell_assignments()
                     self._process_cells()
                 continue  # No apartments allocated in this iteration
-
+            if self.to_adjust and len(apartments) > len(alternative_plan):
+                alternative_plan = apartments
             if not self._validate_apartment_number(apartments) and not skip_number_validation:
                 # Если неверное кол-во, откатываемся
                 for apt in apartments:
@@ -103,17 +135,19 @@ class Section(GeometricFigure):
         self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         if not self.apartments:
             print("Не нашел планировку")
+        self.validate_apartment_connectivity(self.apartments, last_validation=True)
         for apt in self.apartments:
             apt.section_polygon = self.polygon
             apt.cells = None
             apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
             apt._process_cells()
             apt.generate_apartment_planning()
-
         for apt in self.apartments:
             cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
                                                            preserve_topology=True).intersection(
                 self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+            if isinstance(cutted_polygon, MultiPolygon):
+                cutted_polygon = max(cutted_polygon.geoms, key=lambda a: a.area)
             apt.points = list(cutted_polygon.exterior.coords)
             apt.polygon = Polygon(apt.points)
             for room in apt.rooms:
@@ -246,7 +280,7 @@ class Section(GeometricFigure):
         """First validation: Checks if the apartment has at least one side adjacent to the external perimeter."""
         return apartment_polygon.exterior.intersects(self.polygon.exterior)
 
-    def _validate_apartments_free_sides(self, apartments):
+    def _validate_apartments_free_sides(self):
         """Second validation: Checks that each apartment has at least one free side.
 
         A free side is a side not adjacent to the external perimeter or any other apartment.
@@ -254,7 +288,7 @@ class Section(GeometricFigure):
         """
         all_valid = True
         aparts_to_remove = []
-        for i, apt in enumerate(apartments):
+        for i, apt in enumerate(self.apartments):
             apartment_polygon = intersection(apt.polygon, self.polygon)
             has_free_side = False
             # Get the exterior coordinates as pairs of points
@@ -270,22 +304,20 @@ class Section(GeometricFigure):
             for side in sides:
                 side_touches_section_perimeter = self.polygon.exterior.intersects(side)
                 side_touches_building_perimeter = self.building_polygon.exterior.intersects(side)
+                side_outside_section = not self.polygon.contains(side)
                 side_touches_other_apartment = False
                 # Check if side intersects with any other apartment
-                for k, other_apt in enumerate(apartments):
+                for k, other_apt in enumerate(self.apartments):
                     if k == i:
                         continue
                     if other_apt.polygon.exterior.intersects(side):
                         side_touches_other_apartment = True
                         break  # Side touches another apartment
 
-                if not side_touches_other_apartment and not side_touches_section_perimeter:
-                    has_free_side = True
+                if not side_touches_other_apartment and not side_touches_section_perimeter and not side_outside_section:
                     free_sides.append(side)
                 if side_touches_building_perimeter:
                     building_perimeter_sides.append(side)
-            if not has_free_side:
-                aparts_to_remove.append(apt)
 
             apt.free_sides = free_sides
             apt.building_perimeter_sides = building_perimeter_sides
@@ -533,7 +565,7 @@ class Section(GeometricFigure):
             total += self.apartment_table[apt_type]['number']
         return total
 
-    def validate_apartment_connectivity(self, apartments: List[Apartment]):
+    def validate_apartment_connectivity(self, apartments: List[Apartment], last_validation=False):
         """
         Проверяет, пересекается ли каждая квартира с полигоном оставшихся свободных клеток.
         Если нет пересечения, квартира удаляется из списка, а в removed_apartments_table
@@ -549,8 +581,13 @@ class Section(GeometricFigure):
         outsiders = []
         for apartment in apartments:
             # Проверяем пересечение с self.free_polygon
-            if not apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).exterior.touches(free_polygon):
+            inter = apartment.polygon.simplify(tolerance=0.01, preserve_topology=True).exterior.intersection(free_polygon)
+            if inter.is_empty or isinstance(inter, Point):
                 outsiders.append(apartment)
+            elif inter.length < 2:
+                outsiders.append(apartment)
+            elif (isinstance(inter, LineString) or isinstance(inter, MultiLineString)) and last_validation:
+                apartment.free_sides.append(inter)
         if outsiders:
             return True, outsiders
         return False, outsiders

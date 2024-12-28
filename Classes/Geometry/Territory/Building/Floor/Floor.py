@@ -10,7 +10,8 @@ class Floor(GeometricFigure):
                  sections_list: List[List[Tuple[float, float]]],
                  apartment_table: Dict,
                  building_polygon: Polygon = None,
-                 single_floor: bool = False):
+                 single_floor: bool = False,
+                 to_adjust: bool = False):
         super().__init__(points)  # Передаем points в конструктор родительского класса
         self.apartment_table = self._clean_apartment_table(apartment_table)  # Таблица квартир, переданная в класс
 
@@ -19,6 +20,7 @@ class Floor(GeometricFigure):
         self.sections = []
         self.building_polygon = building_polygon
         self.single_floor = single_floor
+        self.to_adjust = to_adjust
 
     def generate_floor_planning(self, cell_size=1, is_copy=False):
         """
@@ -31,7 +33,8 @@ class Floor(GeometricFigure):
             # Если секция одна, таблица остаётся неизменной
             section = Section(points=self.sections_list[0],
                               apartment_table=self.apartment_table,
-                              building_polygon=self.building_polygon)
+                              building_polygon=self.building_polygon,
+                              to_adjust=self.to_adjust)
             self.sections.append(section)
             if not is_copy:
                 section.cells = None
@@ -43,7 +46,8 @@ class Floor(GeometricFigure):
             for i, (points, section_table) in enumerate(zip(self.sections_list, section_tables)):
                 section = Section(points=points,
                                   apartment_table=section_table,
-                                  building_polygon=self.building_polygon)
+                                  building_polygon=self.building_polygon,
+                                  to_adjust=self.to_adjust)
                 self.sections.append(section)
                 if not is_copy:
                     section.cells = None

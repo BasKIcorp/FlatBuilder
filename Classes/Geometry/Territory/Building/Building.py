@@ -73,7 +73,8 @@ class Building(GeometricFigure):
                           sections_list=self.sections,
                           apartment_table=adjusted_table,
                           building_polygon=self.polygon,
-                          single_floor=True)
+                          single_floor=True,
+                          to_adjust=self.to_adjust)
             floor.generate_floor_planning()
             if self.num_floors > 1:
                 for _ in range(self.num_floors - 1):
@@ -91,7 +92,8 @@ class Building(GeometricFigure):
                       sections_list=self.sections,
                       apartment_table=self.apartment_table,
                       building_polygon=self.polygon,
-                      single_floor=True)
+                      single_floor=True,
+                      to_adjust=self.to_adjust)
         floor.generate_floor_planning()
         self.floors.append(floor)
 
@@ -138,7 +140,8 @@ class Building(GeometricFigure):
         first_floor = Floor(points=self.points,
                             sections_list=self.sections,
                             apartment_table=empty_pattern,
-                            building_polygon=self.polygon)
+                            building_polygon=self.polygon,
+                            to_adjust=self.to_adjust)
         first_floor.generate_floor_planning()
         # Ставим этот этаж первым
         self.floors.insert(0, first_floor)
