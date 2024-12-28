@@ -422,8 +422,6 @@ class Painter(QGraphicsView):
             self.scene.addItem(self.polygon)
             self.polygons.update({self.polygon: self.points})
         else:
-            print(self.polygon.polygon())
-
             self.polygon.updatePolygon()
             self.polygon.update_all_edge_lengths()
         for handle in self.points:
@@ -434,8 +432,15 @@ class Painter(QGraphicsView):
             if event.key() == Qt.Key_Delete and self.scene.selectedItems():
                 for item in self.scene.selectedItems():
                     if isinstance(item, MovablePoint):
+                        try:
+                            self.all_points.remove(item)
+                        except ValueError:
+                            pass
+                        polygon = item.parent_polygon
+                        self.points = self.polygons.get(polygon)
                         self.points.remove(item)
                         self.scene.removeItem(item)
+                        self.polygons.update({polygon: self.points})
                     if isinstance(item, ElevatorRect):
                         self.elevators.remove(item)
                         self.scene.removeItem(item)
@@ -480,7 +485,7 @@ class Painter(QGraphicsView):
             for building in buildings:
                 sections.append([building])
         self.sections = sections
-        print(buildings)
+        # print(buildings)
         for section in sections:
             print("Секция: ", section)
         # print(sections)
@@ -493,7 +498,7 @@ class Painter(QGraphicsView):
         worker_thread.start()
         self.points = []
 
-    def onApartmentsGenerated(self, error, floors, messages, output_tables):
+    def onApartmentsGenerated(self, error, buildings, floors, messages, output_tables):
         self.generator_error = error
         self.output_tables = output_tables
         if self.generator_error == "":
@@ -504,8 +509,17 @@ class Painter(QGraphicsView):
                 for point in points:
                     self.scene.removeItem(point)
             for polygon in self.polygons.keys():
-                print(self.polygon)
-                polygon.delete_edge_lengths()
+                if polygon.scene():
+                    polygon.delete_edge_lengths()
+                    self.scene.removeItem(polygon)
+            for building in buildings:
+                poly = building.polygon
+                x, y = poly.exterior.xy
+                poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+                polygon = QPolygonF(poly_points)
+                filled_shape = QGraphicsPolygonItem(polygon)
+                filled_shape.setPen(QPen(Qt.black, 0.3))
+                self.scene.addItem(filled_shape)
             self.floors = floors
             self.show_floor(0, False)
             self.apt_legend_widget.setVisible(True)
@@ -532,7 +546,6 @@ class Painter(QGraphicsView):
             self.room_legend_widget.setVisible(True)
         else:
             self.room_legend_widget.setVisible(False)
-
         for i in range(len(self.floors)):
             building = self.floors[i]
             floor = building[floor_num]
@@ -541,10 +554,16 @@ class Painter(QGraphicsView):
                 for apt in section.apartments:
                     poly = apt.polygon
                     x, y = poly.exterior.xy
+                    print("точки выхода", [(x[i], y[i]) for i in range(len(x))])
                     poly_points = [QPointF(x[i], y[i]) for i in range(len(x))]
+                    print("квартира", poly_points)
                     polygon = QPolygonF(poly_points)
                     area = calculate_polygon_area(polygon)
                     filled_shape = QGraphicsPolygonItem(polygon)
+                    points = [(point.x(), point.y()) for point in filled_shape.polygon()]
+                    print("точки qgraphicsitem", points)
+                    print()
+
                     filled_shape.setToolTip(f"Площадь: {area}м^2")
                     filled_shape.setPen(QPen(Qt.black, 0.3))
                     filled_shape.setBrush(QBrush(QColor(apt_colors[apt.type])))

@@ -2,7 +2,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 
 class BuildingGenerator(QObject):
-    finished = pyqtSignal(object, object, object, object)
+    finished = pyqtSignal(object, object, object, object, object)
 
     def __init__(self, territory):
         super().__init__()
@@ -20,4 +20,4 @@ class BuildingGenerator(QObject):
                 self.floors.append(floors_per_building)
         except Exception:
             self.error = f"Ошибка генерации"
-        self.finished.emit(self.error, self.floors, self.territory.messages, self.territory.output_tables)
+        self.finished.emit(self.error, self.territory.buildings, self.floors, self.territory.messages, self.territory.output_tables)
