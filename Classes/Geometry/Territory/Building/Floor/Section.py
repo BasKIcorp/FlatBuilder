@@ -61,6 +61,22 @@ class Section(GeometricFigure):
                     apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
                     apt._process_cells()
                     apt.generate_apartment_planning()
+                for apt in self.apartments:
+                    cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
+                                                                  preserve_topology=True).intersection(
+                        self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                    if isinstance(cutted_polygon, MultiPolygon):
+                        cutted_polygon = max(cutted_polygon.geoms, key=lambda a: a.area)
+                    apt.points = list(cutted_polygon.exterior.coords)
+                    apt.polygon = Polygon(apt.points)
+                    for room in apt.rooms:
+                        cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
+                                                                       preserve_topology=True).intersection(
+                            apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                        if isinstance(cutted_polygon, Polygon):
+                            room.points = list(cutted_polygon.exterior.coords)
+                            room.polygon = Polygon(room.points)
+                    apt._generate_windows()
                 break
             if not best_plan and iteration == 12:
                 if self.to_adjust:
