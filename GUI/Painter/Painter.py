@@ -458,10 +458,12 @@ class Painter(QGraphicsView):
 
     def fillApartments(self, apartment_table, num_floors, adjust_apts):
         if self.points:
-            self.all_points.append(self.points)
+            if self.points not in self.all_points:
+                self.all_points.append(self.points)
             self.polygons.update({self.polygon: self.points})
         points_for_sections = []
         buildings = []
+        self.sections = []
         sections = []
         for points in self.all_points:
             building = []
@@ -489,10 +491,8 @@ class Painter(QGraphicsView):
             for building in buildings:
                 sections.append([building])
         self.sections = sections
-        # print(buildings)
         for section in sections:
             print("Секция: ", section)
-        # print(sections)
         territory = Territory(building_points=buildings, sections_coords=sections,
                               num_floors=num_floors, apartment_table=apartment_table,
                               to_adjust=adjust_apts)
