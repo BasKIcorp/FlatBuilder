@@ -1,7 +1,7 @@
 import math
-from PyQt5.QtCore import Qt, QPointF, QRectF, QRect
-from PyQt5.QtGui import QPen, QPainterPath, QPolygonF, QColor
-from PyQt5.QtWidgets import QGraphicsItemGroup, QGraphicsRectItem, QGraphicsPathItem
+from PyQt5.QtCore import QPointF, QRectF
+from PyQt5.QtGui import QPen, QPainterPath, QColor
+from PyQt5.QtWidgets import QGraphicsItemGroup, QGraphicsPathItem
 
 
 class RotationHandle(QGraphicsItemGroup):
@@ -28,14 +28,14 @@ class RotationHandle(QGraphicsItemGroup):
         arc_span_angle = 270  # In degrees
 
         # Define the arc
-        rect = QRectF(-self.radius, -self.radius, self.radius * 2, self.radius * 2)
+        rect = QRectF(-self.radius, -self.radius, self.radius, self.radius)
         rect.moveTopLeft(QPointF(-self.radius, -self.radius))
         path.arcMoveTo(rect, arc_start_angle)
         path.arcTo(rect, arc_start_angle, arc_span_angle)
 
         # Arrowhead (horizontal, pointing left)
         arrow_tip = path.currentPosition()  # Get the endpoint of the arc
-        arrow_size = 2
+        arrow_size = 1
         arrow_left = QPointF(arrow_tip.x() - arrow_size, arrow_tip.y() - arrow_size / 2)
         arrow_right = QPointF(arrow_tip.x() - arrow_size, arrow_tip.y() + arrow_size / 2)
 
@@ -45,22 +45,26 @@ class RotationHandle(QGraphicsItemGroup):
         path.lineTo(arrow_right)
 
         icon = QGraphicsPathItem(path)
-        icon.setPen(QPen(QColor("black"), 0.5))  # Customize pen color and width
+        icon.setPen(QPen(QColor("black"), 0.2))  # Customize pen color and width
         return icon
 
     def update_position(self):
         """Update the position of the rotation handle relative to the parent rectangle."""
-        center = self.parent_rect.getPosition()
+        # Get the parent's center in scene coordinates
+        center = self.parent_rect.mapToScene(self.parent_rect.transformOriginPoint())
+
+        # Get the radius of the bounding rectangle (in scene coordinates)
         rect_radius = max(self.parent_rect.boundingRect().width(), self.parent_rect.boundingRect().height()) / 2
-        total_radius = rect_radius + 10
-        # Position the handle at the top of the circular path
-        self.setPos(center.x(), center.y() - total_radius)
+        total_radius = rect_radius + 5  # 10px offset above the rectangle
+
+        # Position the handle precisely above the center of the rectangle
+        self.setPos(center.x() + 1.5, center.y() - total_radius)
 
     def itemChange(self, change, value):
         """Handle the change in item position."""
         if self.user_interaction:
             if change == QGraphicsItemGroup.ItemPositionChange:
-                center = self.parent_rect.getPosition()
+                center = self.parent_rect.mapToScene(self.parent_rect.transformOriginPoint())
                 constrained_position = self.constrain_to_circle(center, value)
                 self.rotate_parent(constrained_position)  # Only rotate the parent (ElevatorRect)
                 self.setPos(constrained_position)  # Move only the handle, not the rect
@@ -76,7 +80,7 @@ class RotationHandle(QGraphicsItemGroup):
 
         # Adjust radius to include the 10-pixel offset
         rect_radius = max(self.parent_rect.boundingRect().width(), self.parent_rect.boundingRect().height()) / 2
-        total_radius = rect_radius + 10
+        total_radius = rect_radius + 5
 
         x = center.x() + total_radius * math.cos(angle)
         y = center.y() + total_radius * math.sin(angle)

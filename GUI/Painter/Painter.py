@@ -348,6 +348,10 @@ class Painter(QGraphicsView):
                 item.handle = handle
                 self.scene.addItem(handle)
                 handle.update_position()
+        else:
+            for child in self.scene.items():
+                if isinstance(child, RotationHandle):
+                    self.scene.removeItem(child)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.RightButton:
