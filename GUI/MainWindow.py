@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
         self.stairs_button.setDisabled(True)
 
         self.add_point_button = QPushButton("Добавить точку")
-        self.add_point_button.clicked.connect(self.graphics_view.add_preview_point)
+        self.add_point_button.clicked.connect(self.add_point)
         self.add_point_button.setFixedWidth(180)
 
         self.add_building_button = QPushButton("Добавить здание")
@@ -349,6 +349,10 @@ class MainWindow(QMainWindow):
         self.graphics_view.add_point(10, -10)
         self.graphics_view.add_point(10, 10)
         self.graphics_view.update_shape()
+
+        self.graphics_view.point_added.connect(self.unlock_buttons)
+        self.graphics_view.building_added.connect(self.unlock_buttons)
+        self.graphics_view.section_added.connect(self.unlock_buttons)
 
     def building_changed(self, index):
         if hasattr(self, 'previous_index') and self.previous_index is not None:
@@ -427,9 +431,25 @@ class MainWindow(QMainWindow):
         self.previous_index = len(self.building_tables) - 1
 
         self.graphics_view.add_building()
+        self.lock_buttons()
 
     def add_section(self):
         self.graphics_view.add_section()
+        self.lock_buttons()
+
+    def add_point(self):
+        self.graphics_view.add_preview_point()
+        self.lock_buttons()
+
+    def lock_buttons(self):
+        self.add_point_button.setDisabled(True)
+        self.add_building_button.setDisabled(True)
+        self.add_section_button.setDisabled(True)
+
+    def unlock_buttons(self):
+        self.add_point_button.setDisabled(False)
+        self.add_building_button.setDisabled(False)
+        self.add_section_button.setDisabled(False)
 
     def index_changed(self, index):
         self.graphics_view.show_floor(index, self.checkbox.isChecked())
@@ -508,8 +528,6 @@ class MainWindow(QMainWindow):
             if not self.floor_edit.text():
                 self.error_text.setText("Укажите количество этажей!")
             else:
-                all_zero = True
-                num_zero = False
                 for building in self.building_tables:
                     apartment_table = {
                         'studio': {
@@ -539,22 +557,26 @@ class MainWindow(QMainWindow):
                         },
                     }
                     apartment_tables.append(apartment_table)
-
-                    for apartment, details in apartment_table.items():
-                        if any(value != 0 for key, value in details.items() if isinstance(value, int)):
-                            all_zero = False
-                            break
-                    for apartment, details in apartment_table.items():
+                first_check_index = -1
+                second_check_index = -1
+                third_check_index = -1
+                for i in range(len(apartment_tables)):
+                    for apartment, details in apartment_tables[i].items():
+                        if (details["area_range"][0] == 0) or (details["area_range"][1] == 0):
+                            first_check_index = i
                         if details["percent"] != 0 and details["number"] == 0:
-                            num_zero = True
-                            break
-                if all_zero:
-                    self.error_text.setText("Введите параметры квартир!")
-                elif (int(self.percent[0].text()) + int(self.percent[1].text()) + int(self.percent[2].text()) + int(
-                        self.percent[3].text()) + int(self.percent[4].text())) != 100:
-                    self.error_text.setText("Сумма процентов должна быть равна 100!")
-                elif num_zero:
-                    self.error_text.setText("Введите количество квартир!")
+                            third_check_index = i
+                    sum_percent = 0
+                    for apartment, details in apartment_tables[i].items():
+                        sum_percent += details["percent"]
+                    if sum_percent != 100:
+                        second_check_index = i
+                if first_check_index != -1:
+                    self.error_text.setText(f"Введите параметры квартир для здания №{first_check_index+1}!")
+                elif second_check_index != -1:
+                    self.error_text.setText(f"Сумма процентов должна быть равна 100 для здания №{second_check_index+1}!")
+                elif third_check_index != -1:
+                    self.error_text.setText(f"Введите количество квартир для здания №{third_check_index+1}!")
                 else:
                     if self.generate_button.text() == "Сгенерировать другой вариант":
                         self.generate_button.setDisabled(True)

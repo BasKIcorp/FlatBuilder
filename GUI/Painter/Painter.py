@@ -122,6 +122,9 @@ class RoomLegendWidget(QWidget):
 
 class Painter(QGraphicsView):
     apartmentsGenerated = pyqtSignal()
+    point_added = pyqtSignal()
+    building_added = pyqtSignal()
+    section_added = pyqtSignal()
 
     def __init__(self, scene):
         super().__init__()
@@ -248,6 +251,7 @@ class Painter(QGraphicsView):
                     self.add_point(scene_pos.x(), scene_pos.y())
                     self.update_shape()
                     self.preview_point = None
+                    self.point_added.emit()
                 elif self.preview_point_1:
                     self.scene.removeItem(self.preview_point_1)
                     self.scene.removeItem(self.preview_point_2)
@@ -263,6 +267,7 @@ class Painter(QGraphicsView):
                     self.preview_point_2 = None
                     self.preview_point_3 = None
                     self.preview_point_4 = None
+                    self.building_added.emit()
                 elif self.preview_rect:
                     rect_pos = self.preview_rect.pos()
                     if self.mode == "elevator":
@@ -337,6 +342,7 @@ class Painter(QGraphicsView):
                         self.cut_first_point = None
                         self.cut_second_point = None
                         self.cutting_mode = False
+                        self.section_added.emit()
                     else:
                         self.cut_first_point = item
                     item.setFlag(QGraphicsEllipseItem.ItemIsMovable, True)
