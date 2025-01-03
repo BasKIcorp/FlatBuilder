@@ -377,7 +377,8 @@ class MainWindow(QMainWindow):
             self.number[row].setText(number[row])
 
         self.previous_index = index
-
+        self.graphics_view.polygon = list(self.graphics_view.polygons.keys())[index]
+        self.graphics_view.points = list(self.graphics_view.polygons.values())[index]
         if self.done:
             building_output = self.output_tables[self.building_combo.currentIndex()]
             av_area = [building_output['studio']['average_area'], building_output['1 room']['average_area'],
@@ -719,6 +720,7 @@ class MainWindow(QMainWindow):
         self.building_combo.setCurrentIndex(0)
         for i in range(1, self.building_combo.count()):
             self.building_combo.removeItem(i)
+        self.previous_index = 0
         area_from = ["25", "40", "58", "78", "100"]
         area_to = ["35", "55", "75", "98", "135"]
         number = ["0", "0", "0", "0", "0"]
@@ -729,6 +731,9 @@ class MainWindow(QMainWindow):
             self.area_to[row].setText(area_to[row])
             self.percent[row].setText(percent[row])
             self.number[row].setText(number[row])
+
+        self.building_tables.clear()
+        self.building_tables.append([area_from, area_to, percent, number])
         self.done = False
 
     def show_rectangle_dialog(self, mode):

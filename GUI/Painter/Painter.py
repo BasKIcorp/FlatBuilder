@@ -253,6 +253,7 @@ class Painter(QGraphicsView):
                     self.preview_point = None
                     self.point_added.emit()
                 elif self.preview_point_1:
+                    self.polygon = None
                     self.scene.removeItem(self.preview_point_1)
                     self.scene.removeItem(self.preview_point_2)
                     self.scene.removeItem(self.preview_point_3)
@@ -388,6 +389,8 @@ class Painter(QGraphicsView):
         self.point_id_counter += 1
         self.scene.addItem(point)
         self.points.append(point)
+        if self.polygon is not None:
+            self.polygons.update({self.polygon: self.points})
 
     def add_section(self):
         self.cutting_mode = True
@@ -407,7 +410,6 @@ class Painter(QGraphicsView):
         self.scene.addItem(self.preview_point_4)
 
     def add_building(self):
-        self.all_points.append(self.points)
         self.polygons.update({self.polygon: self.points})
         self.points = []
         self.polygon = None
@@ -434,6 +436,7 @@ class Painter(QGraphicsView):
         else:
             self.polygon.updatePolygon()
             self.polygon.update_all_edge_lengths()
+            # self.polygons.update({self.polygon: self.points})
         for handle in self.points:
             handle.parent_polygon = self.polygon
 
@@ -442,10 +445,6 @@ class Painter(QGraphicsView):
             if event.key() == Qt.Key_Delete and self.scene.selectedItems():
                 for item in self.scene.selectedItems():
                     if isinstance(item, MovablePoint):
-                        try:
-                            self.all_points.remove(item)
-                        except ValueError:
-                            pass
                         polygon = item.parent_polygon
                         self.points = self.polygons.get(polygon)
                         self.points.remove(item)
@@ -464,13 +463,14 @@ class Painter(QGraphicsView):
 
     def fillApartments(self, apartment_table, num_floors, adjust_apts):
         if self.points:
-            if self.points not in self.all_points:
-                self.all_points.append(self.points)
             self.polygons.update({self.polygon: self.points})
         points_for_sections = []
         buildings = []
         self.sections = []
         sections = []
+        self.all_points = []
+        for points in self.polygons.values():
+            self.all_points.append(points)
         for points in self.all_points:
             building = []
             for point in points:
