@@ -1,8 +1,6 @@
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPen
-from PyQt5.QtWidgets import QGraphicsItemGroup, QGraphicsRectItem, QGraphicsLineItem
-
-from GUI.Painter.RotationHandle import RotationHandle
+from PyQt5.QtGui import QPen, QBrush
+from PyQt5.QtWidgets import QGraphicsItemGroup, QGraphicsRectItem, QGraphicsLineItem, QStyle
 
 
 class StairsRect(QGraphicsItemGroup):
@@ -66,6 +64,11 @@ class StairsRect(QGraphicsItemGroup):
 
     def rotateObject(self, angle):
         self.setRotation(angle)
+
+    def paint(self, painter, option, widget=None):
+        option.state &= ~QStyle.State_Selected
+        painter.setPen(QPen(Qt.transparent))
+        painter.setBrush(QBrush(Qt.transparent))
 
     def itemChange(self, change, value):
         if change == QGraphicsItemGroup.ItemPositionChange:

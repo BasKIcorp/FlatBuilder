@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import QGraphicsScene, QMainWindow, QPushButton, QWidget, Q
     QSplitter, QTableWidgetItem, QTableWidget, QLineEdit, QFileDialog, QLabel, QHBoxLayout, QComboBox, QDialog, \
     QCheckBox, QGraphicsPolygonItem, QGraphicsRectItem, QGraphicsTextItem
 from GUI.Painter.Painter import Painter
+from GUI.Painter.RotationHandle import RotationHandle
 
 apt_colors = {
     'studio': '#fa6b6b',
@@ -458,6 +459,10 @@ class MainWindow(QMainWindow):
             self.add_section_button.setDisabled(True)
             self.combo.clear()
             self.error_text.setText("")
+
+            self.checkbox.setChecked(False)
+            self.clear_button.setDisabled(False)
+            self.save_button.setDisabled(False)
             for i in range(1, int(self.floor_edit.text()) + 1):
                 self.combo.addItem(f"Этаж {i}")
 
@@ -504,6 +509,7 @@ class MainWindow(QMainWindow):
                 self.error_text.setText("Укажите количество этажей!")
             else:
                 all_zero = True
+                num_zero = False
                 for building in self.building_tables:
                     apartment_table = {
                         'studio': {
@@ -538,14 +544,26 @@ class MainWindow(QMainWindow):
                         if any(value != 0 for key, value in details.items() if isinstance(value, int)):
                             all_zero = False
                             break
-
+                    for apartment, details in apartment_table.items():
+                        if details["percent"] != 0 and details["number"] == 0:
+                            num_zero = True
+                            break
                 if all_zero:
                     self.error_text.setText("Введите параметры квартир!")
                 elif (int(self.percent[0].text()) + int(self.percent[1].text()) + int(self.percent[2].text()) + int(
                         self.percent[3].text()) + int(self.percent[4].text())) != 100:
                     self.error_text.setText("Сумма процентов должна быть равна 100!")
+                elif num_zero:
+                    self.error_text.setText("Введите количество квартир!")
                 else:
                     if self.generate_button.text() == "Сгенерировать другой вариант":
+                        self.generate_button.setDisabled(True)
+                        self.graphics_view.interactive = False
+                        self.generate_button.setDisabled(True)
+                        self.clear_button.setDisabled(True)
+                        self.save_button.setDisabled(True)
+                        self.elevator_button.setDisabled(True)
+                        self.stairs_button.setDisabled(True)
                         for room in self.graphics_view.rooms:
                             self.scene.removeItem(room)
                         for filled_shape in self.graphics_view.floor_figures:
@@ -556,8 +574,6 @@ class MainWindow(QMainWindow):
                             self.scene.removeItem(room_area)
                         for window in self.graphics_view.window_items:
                             self.scene.removeItem(window)
-                    self.generate_button.setDisabled(True)
-                    self.graphics_view.interactive = False
                     self.error_text.setText("Генерация...")
                     self.graphics_view.fillApartments(apartment_tables, int(self.floor_edit.text()),
                                                       self.auto_check.isChecked())
@@ -573,6 +589,9 @@ class MainWindow(QMainWindow):
             self.save_button.setDisabled(True)
             self.elevator_button.setDisabled(True)
             self.stairs_button.setDisabled(True)
+            for child in self.graphics_view.scene.items():
+                if isinstance(child, RotationHandle):
+                    self.graphics_view.scene.removeItem(child)
             printer = QPrinter(QPrinter.HighResolution)
             printer.setOutputFormat(QPrinter.PdfFormat)
             printer.setOutputFileName(file_path)
