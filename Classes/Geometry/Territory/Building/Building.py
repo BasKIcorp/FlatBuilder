@@ -44,16 +44,13 @@ class Building(GeometricFigure):
 
     def generate_floors(self):
         """Генерирует этажи, добавляя их в список floors."""
-        print(self.apartment_table)
         if not self.to_adjust:
             if self.num_floors == 1:
                 self._generate_single_floor()
                 return
-            print('here')
             # Шаг 1: Создаем floor_tables и выполняем первичную и вторичную обработку
             floor_tables = self._initialize_empty_floor_tables()
             floor_tables = self.primary_processing(floor_tables)  # Работаем с копией таблицы
-            print(floor_tables)
             if self.num_floors >= 2:
                 self.secondary_processing(floor_tables=floor_tables)  # Работаем с floor_tables
 

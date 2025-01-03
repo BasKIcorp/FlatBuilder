@@ -33,6 +33,7 @@ class Apartment(GeometricFigure):
         self.messages = []
 
     def generate_apartment_planning(self):
+        print(self.free_sides)
         self.points = list(Polygon(self.points).simplify(tolerance=0.01,preserve_topology=True).exterior.coords)
         max_iterations = 60
         best_plan = None
@@ -122,6 +123,7 @@ class Apartment(GeometricFigure):
                             if stop:
                                 break
                     if stop:
+                        failure = True
                         break
 
                     room_polygon = union_all([cell['polygon'] for cell in room_cells])

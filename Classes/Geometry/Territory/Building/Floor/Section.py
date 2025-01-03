@@ -13,6 +13,7 @@ from typing import List, Tuple, Dict
 import time
 import copy
 from shapely.affinity import translate
+import math
 
 
 class Section(GeometricFigure):
@@ -35,8 +36,8 @@ class Section(GeometricFigure):
         self.simple_plan = False
         self.temporary_cells = []
         self.to_adjust = to_adjust
-        print(self.apartment_table)
         self.plan_done = False
+
 
     def generate_section_planning(self, max_iterations=30, cell_size=1):
         self.cell_size = cell_size
@@ -73,7 +74,7 @@ class Section(GeometricFigure):
                     for room in apt.rooms:
                         cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
                                                                        preserve_topology=True).intersection(
-                            apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                            self.polygon.simplify(tolerance=0.01, preserve_topology=True))
                         if isinstance(cutted_polygon, Polygon):
                             room.points = list(cutted_polygon.exterior.coords)
                             room.polygon = Polygon(room.points)
@@ -82,11 +83,9 @@ class Section(GeometricFigure):
                 break
             if not best_plan and iteration == 12 and alternative_plan:
                 if self.to_adjust:
-                    print('this case')
                     self.apartments = alternative_plan
                     if not self.apartments:
                         print("Не нашел планировку")
-                    print(len(self.apartments))
                     for apt in self.apartments:
                         apt.section_polygon = self.polygon
                         apt.cells = None
@@ -104,7 +103,7 @@ class Section(GeometricFigure):
                         for room in apt.rooms:
                             cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
                                                                            preserve_topology=True).intersection(
-                                apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                                self.polygon.simplify(tolerance=0.01, preserve_topology=True))
                             if isinstance(cutted_polygon, Polygon):
                                 room.points = list(cutted_polygon.exterior.coords)
                                 room.polygon = Polygon(room.points)
@@ -152,34 +151,34 @@ class Section(GeometricFigure):
                 break
 
 
-
-        self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
         if not self.apartments:
-            print("Не нашел планировку")
-        self.validate_apartment_connectivity(self.apartments, last_validation=True)
-        if not self.plan_done and self.apartments:
-            for apt in self.apartments:
-                apt.section_polygon = self.polygon
-                apt.cells = None
-                apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
-                apt._process_cells()
-                apt.generate_apartment_planning()
-            for apt in self.apartments:
-                cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
-                                                               preserve_topology=True).intersection(
-                    self.polygon.simplify(tolerance=0.01, preserve_topology=True))
-                if isinstance(cutted_polygon, MultiPolygon):
-                    cutted_polygon = max(cutted_polygon.geoms, key=lambda a: a.area)
-                apt.points = list(cutted_polygon.exterior.coords)
-                apt.polygon = Polygon(apt.points)
-                for room in apt.rooms:
-                    cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
-                                                                   preserve_topology=True).intersection(
-                        apt.polygon.simplify(tolerance=0.01, preserve_topology=True))
-                    if isinstance(cutted_polygon, Polygon):
-                        room.points = list(cutted_polygon.exterior.coords)
-                        room.polygon = Polygon(room.points)
-                apt._generate_windows()
+            self.apartments = best_plan if best_plan is not None else []  # Save the best generated plan
+            if not self.apartments:
+                print("Не нашел планировку")
+            self.validate_apartment_connectivity(self.apartments, last_validation=True)
+            if not self.plan_done and self.apartments:
+                for apt in self.apartments:
+                    apt.section_polygon = self.polygon
+                    apt.cells = None
+                    apt.check_and_create_cell_grid(cell_size=1.0, polygon_to_check=Polygon(apt.points))
+                    apt._process_cells()
+                    apt.generate_apartment_planning()
+                for apt in self.apartments:
+                    cutted_polygon = Polygon(apt.points).simplify(tolerance=0.01,
+                                                                  preserve_topology=True).intersection(
+                        self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                    if isinstance(cutted_polygon, MultiPolygon):
+                        cutted_polygon = max(cutted_polygon.geoms, key=lambda a: a.area)
+                    apt.points = list(cutted_polygon.exterior.coords)
+                    apt.polygon = Polygon(apt.points)
+                    for room in apt.rooms:
+                        cutted_polygon = Polygon(room.points).simplify(tolerance=0.01,
+                                                                       preserve_topology=True).intersection(
+                            self.polygon.simplify(tolerance=0.01, preserve_topology=True))
+                        if isinstance(cutted_polygon, Polygon):
+                            room.points = list(cutted_polygon.exterior.coords)
+                            room.polygon = Polygon(room.points)
+                    apt._generate_windows()
 
         total_time = time.time() - start_time
         print(f"Section planning completed in {total_time:.2f} seconds.")
@@ -216,8 +215,11 @@ class Section(GeometricFigure):
         apartment_table_copy = copy.deepcopy(self.apartment_table)
         while_start_time = time.time()
         next_preserve_cells = []
+        max_iterations = math.ceil(1.2 * self.total_apartment_number)  # или динамически вычисляемое значение
+        iteration_count = 0
         while apartment_table_copy:
-            if time.time() - while_start_time > 5:
+            iteration_count += 1
+            if iteration_count > max_iterations:
                 break
             # Выбираем случайный тип квартиры из доступных
             sorted_types = sorted(apartment_table_copy.keys())
@@ -698,7 +700,6 @@ class Section(GeometricFigure):
             if cell_polygon.intersects(side) and isinstance(intersection(side, self.polygon), LineString):
                 touching_side = side
                 break
-        print(touching_side)
         if not touching_side:
             return  # Нет подходящей стороны
 
